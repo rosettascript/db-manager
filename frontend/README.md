@@ -1,73 +1,188 @@
-# Welcome to your Lovable project
+# DB Visualizer - Frontend
 
-## Project info
+React frontend for the DB Visualizer application - a PostgreSQL database visualization and management tool.
 
-**URL**: https://lovable.dev/projects/368b2260-723e-4cc6-9f09-3f7d165769db
+## 🚀 Quick Start
 
-## How can I edit this code?
+### Prerequisites
 
-There are several ways of editing your application.
+- Node.js 18+ and npm
+- Backend server running (see [SETUP_GUIDE.md](../SETUP_GUIDE.md))
 
-**Use Lovable**
+### Installation
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/368b2260-723e-4cc6-9f09-3f7d165769db) and start prompting.
+```bash
+# Install dependencies
+npm install
 
-Changes made via Lovable will be committed automatically to this repo.
+# Create .env file (optional)
+echo "VITE_API_URL=http://localhost:3000/api" > .env
 
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start development server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The frontend will run on `http://localhost:8080` or `http://localhost:5173`
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## 📚 Documentation
 
-**Use GitHub Codespaces**
+### Integration Documentation
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+- **[FRONTEND_INTEGRATION_README.md](../FRONTEND_INTEGRATION_README.md)** - Complete integration guide
+- **[SETUP_GUIDE.md](../SETUP_GUIDE.md)** - Setup instructions
+- **[API_SERVICE_DOCUMENTATION.md](../API_SERVICE_DOCUMENTATION.md)** - API service reference
+- **[STATE_MANAGEMENT_DOCUMENTATION.md](../STATE_MANAGEMENT_DOCUMENTATION.md)** - State management guide
 
-## What technologies are used for this project?
+### Testing Documentation
 
-This project is built with:
+- **[TEST_PHASE12_12.md](../TEST_PHASE12_12.md)** - Comprehensive testing guide
+- **[INTEGRATION_TEST_CHECKLIST.md](../INTEGRATION_TEST_CHECKLIST.md)** - Quick test checklist
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## 🛠️ Technologies
 
-## How can I deploy this project?
+- **Vite** - Build tool and dev server
+- **TypeScript** - Type safety
+- **React** - UI framework
+- **React Query (TanStack Query)** - Server state management
+- **shadcn-ui** - UI component library
+- **Tailwind CSS** - Styling
+- **React Router** - Routing
+- **ReactFlow** - ER diagram visualization
 
-Simply open [Lovable](https://lovable.dev/projects/368b2260-723e-4cc6-9f09-3f7d165769db) and click on Share -> Publish.
+## 📦 Available Scripts
 
-## Can I connect a custom domain to my Lovable project?
+```bash
+# Development
+npm run dev              # Start dev server
 
-Yes, you can!
+# Build
+npm run build           # Build for production
+npm run build:dev       # Build in development mode
+npm run preview         # Preview production build
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+# Code Quality
+npm run lint            # Run ESLint
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+# Testing
+npm run test:state-management  # Run state management tests
+```
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+Create a `.env` file in the frontend directory:
+
+```bash
+# API Base URL (default: http://localhost:3000/api)
+VITE_API_URL=http://localhost:3000/api
+```
+
+### API Configuration
+
+The API base URL is configured in `src/lib/api/config.ts` and can be overridden with the `VITE_API_URL` environment variable.
+
+## 🏗️ Project Structure
+
+```
+frontend/src/
+├── lib/
+│   ├── api/              # API integration layer
+│   │   ├── config.ts     # API configuration
+│   │   ├── client.ts     # HTTP client
+│   │   ├── types.ts      # TypeScript interfaces
+│   │   ├── errors.ts     # Error handling
+│   │   └── services/     # API service modules
+│   ├── query/            # React Query utilities
+│   │   ├── queryKeys.ts  # Query key factory
+│   │   ├── queryConfig.ts # Query configuration
+│   │   └── cacheUtils.ts # Cache utilities
+│   └── notifications.ts  # Notification utilities
+├── contexts/
+│   └── ConnectionContext.tsx  # Global connection state
+├── components/
+│   ├── connection/       # Connection management
+│   ├── query/            # Query components
+│   ├── error/            # Error components
+│   └── empty/            # Empty state components
+└── pages/
+    ├── SchemaBrowser.tsx # Schema browsing
+    ├── TableViewer.tsx  # Table data viewing
+    ├── QueryBuilder.tsx # SQL query execution
+    └── ERDiagram.tsx     # ER diagram
+```
+
+## 🔌 API Integration
+
+The frontend communicates with the NestJS backend through a centralized API client. All API calls are organized into service modules:
+
+- `connectionsService` - Connection management
+- `schemasService` - Schema and metadata
+- `dataService` - Table data operations
+- `queriesService` - Query execution
+- `queryHistoryService` - Query history and saved queries
+- `diagramService` - ER diagram generation
+- `exportService` - Data export
+- `foreignKeysService` - Foreign key navigation
+
+See [API_SERVICE_DOCUMENTATION.md](../API_SERVICE_DOCUMENTATION.md) for complete API reference.
+
+## 🔄 State Management
+
+The application uses React Query for server state management:
+
+- **Query Keys:** Centralized factory in `lib/query/queryKeys.ts`
+- **Query Configuration:** Default options in `lib/query/queryConfig.ts`
+- **Cache Management:** Utilities in `lib/query/cacheUtils.ts`
+- **Connection Context:** Global state in `contexts/ConnectionContext.tsx`
+
+See [STATE_MANAGEMENT_DOCUMENTATION.md](../STATE_MANAGEMENT_DOCUMENTATION.md) for detailed guide.
+
+## 🧪 Testing
+
+### Test Pages
+
+Interactive test pages available:
+- `/api-test` - API foundation tests
+- `/state-test` - State management tests
+- `/ui-ux-test` - UI/UX tests
+
+### Running Tests
+
+```bash
+# Automated state management tests
+npm run test:state-management
+
+# Or use test pages in browser
+# Navigate to http://localhost:8080/[test-page]
+```
+
+## 🐛 Troubleshooting
+
+### CORS Errors
+
+Ensure backend CORS allows frontend origin. Check `backend/src/main.ts`.
+
+### API Connection Failed
+
+- Verify backend is running: `curl http://localhost:3000/api/health`
+- Check `VITE_API_URL` in `.env`
+- Check browser console for errors
+
+### Module Not Found
+
+```bash
+# Reinstall dependencies
+rm -rf node_modules package-lock.json
+npm install
+```
+
+See [SETUP_GUIDE.md](../SETUP_GUIDE.md) for more troubleshooting tips.
+
+## 📝 License
+
+MIT
+
+---
+
+**For complete setup instructions, see [SETUP_GUIDE.md](../SETUP_GUIDE.md)**

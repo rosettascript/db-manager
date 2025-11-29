@@ -189,6 +189,205 @@ export const SQLHighlightedEditor = ({
   const lineNumbersRef = useRef<HTMLDivElement>(null);
   const [lineCount, setLineCount] = useState(1);
 
+  // Native event listener for Ctrl+Shift+K to ensure it works before React handlers
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const handleNativeKeyDown = (e: KeyboardEvent) => {
+      // Only handle if event target is the textarea
+      if (e.target !== textarea) return;
+      
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const lines = value.split('\n');
+      const currentLineIndex = value.substring(0, start).split('\n').length - 1;
+      
+      // Delete line: Ctrl+Shift+K
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === "K" || e.key === "k")) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        
+        if (lines.length > 1) {
+          const newLines = [...lines];
+          newLines.splice(currentLineIndex, 1);
+          const newValue = newLines.join('\n');
+          onChange(newValue);
+          
+          // Position cursor at the start of next line (or previous if deleted last line)
+          const targetLineIndex = currentLineIndex < newLines.length ? currentLineIndex : currentLineIndex - 1;
+          const newCursorPos = newLines.slice(0, targetLineIndex).join('\n').length + (targetLineIndex > 0 ? 1 : 0);
+          
+          requestAnimationFrame(() => {
+            if (textareaRef.current) {
+              textareaRef.current.selectionStart = textareaRef.current.selectionEnd = newCursorPos;
+              textareaRef.current.focus();
+            }
+          });
+        } else {
+          // If only one line, just clear it
+          onChange('');
+          requestAnimationFrame(() => {
+            if (textareaRef.current) {
+              textareaRef.current.selectionStart = textareaRef.current.selectionEnd = 0;
+              textareaRef.current.focus();
+            }
+          });
+        }
+        return;
+      }
+
+      // Duplicate line: Ctrl+D
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === "d" || e.key === "D")) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        
+        const newLines = [...lines];
+        newLines.splice(currentLineIndex + 1, 0, lines[currentLineIndex]);
+        const newValue = newLines.join('\n');
+        onChange(newValue);
+        
+        // Position cursor at the start of the duplicated line
+        const newCursorPos = newLines.slice(0, currentLineIndex + 1).join('\n').length + 1;
+        
+        requestAnimationFrame(() => {
+          if (textareaRef.current) {
+            textareaRef.current.selectionStart = textareaRef.current.selectionEnd = newCursorPos;
+            textareaRef.current.focus();
+          }
+        });
+        return;
+      }
+
+      // Move line up: Alt+Up
+      if (e.altKey && !e.ctrlKey && !e.metaKey && e.key === "ArrowUp") {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        
+        if (currentLineIndex > 0) {
+          const newLines = [...lines];
+          [newLines[currentLineIndex - 1], newLines[currentLineIndex]] = [newLines[currentLineIndex], newLines[currentLineIndex - 1]];
+          const newValue = newLines.join('\n');
+          onChange(newValue);
+          
+          // Maintain cursor position relative to line start
+          const lineStartPos = newLines.slice(0, currentLineIndex - 1).join('\n').length + (currentLineIndex > 1 ? 1 : 0);
+          const cursorOffset = start - lines.slice(0, currentLineIndex).join('\n').length - (currentLineIndex > 0 ? 1 : 0);
+          const newCursorPos = Math.min(lineStartPos + cursorOffset, lineStartPos + newLines[currentLineIndex - 1].length);
+          
+          requestAnimationFrame(() => {
+            if (textareaRef.current) {
+              textareaRef.current.selectionStart = textareaRef.current.selectionEnd = newCursorPos;
+              textareaRef.current.focus();
+            }
+          });
+        }
+        return;
+      }
+
+      // Move line down: Alt+Down
+      if (e.altKey && !e.ctrlKey && !e.metaKey && e.key === "ArrowDown") {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        
+        if (currentLineIndex < lines.length - 1) {
+          const newLines = [...lines];
+          [newLines[currentLineIndex], newLines[currentLineIndex + 1]] = [newLines[currentLineIndex + 1], newLines[currentLineIndex]];
+          const newValue = newLines.join('\n');
+          onChange(newValue);
+          
+          // Maintain cursor position relative to line start
+          const lineStartPos = newLines.slice(0, currentLineIndex + 1).join('\n').length + (currentLineIndex >= 0 ? 1 : 0);
+          const cursorOffset = start - lines.slice(0, currentLineIndex).join('\n').length - (currentLineIndex > 0 ? 1 : 0);
+          const newCursorPos = Math.min(lineStartPos + cursorOffset, lineStartPos + newLines[currentLineIndex + 1].length);
+          
+          requestAnimationFrame(() => {
+            if (textareaRef.current) {
+              textareaRef.current.selectionStart = textareaRef.current.selectionEnd = newCursorPos;
+              textareaRef.current.focus();
+            }
+          });
+        }
+        return;
+      }
+
+      // Comment/uncomment line(s): Ctrl+/
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && (e.key === "/" || e.key === "?")) {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        
+        // Determine which lines to comment/uncomment
+        const startLineIndex = value.substring(0, start).split('\n').length - 1;
+        const endLineIndex = value.substring(0, end).split('\n').length - 1;
+        const isMultiLine = startLineIndex !== endLineIndex || (start !== end && lines[startLineIndex].trim() !== lines[startLineIndex].substring(Math.min(start, end)));
+        
+        const newLines = [...lines];
+        let hasComments = false;
+        let hasUncommented = false;
+        
+        // Check if we're commenting or uncommenting
+        for (let i = startLineIndex; i <= endLineIndex; i++) {
+          const trimmedLine = newLines[i].trim();
+          if (trimmedLine.startsWith('--')) {
+            hasComments = true;
+          } else if (trimmedLine.length > 0) {
+            hasUncommented = true;
+          }
+        }
+        
+        const shouldComment = !hasComments || (hasComments && hasUncommented);
+        
+        // Apply comment/uncomment to selected lines
+        for (let i = startLineIndex; i <= endLineIndex; i++) {
+          if (newLines[i].trim().length === 0) continue; // Skip empty lines
+          
+          if (shouldComment) {
+            // Comment the line
+            const trimmed = newLines[i].trim();
+            if (!trimmed.startsWith('--')) {
+              const indent = newLines[i].match(/^(\s*)/)?.[0] || '';
+              newLines[i] = indent + '-- ' + trimmed;
+            }
+          } else {
+            // Uncomment the line
+            const trimmed = newLines[i].trim();
+            if (trimmed.startsWith('--')) {
+              const uncommented = trimmed.substring(2).trim();
+              const indent = newLines[i].match(/^(\s*)/)?.[0] || '';
+              newLines[i] = indent + uncommented;
+            }
+          }
+        }
+        
+        const newValue = newLines.join('\n');
+        onChange(newValue);
+        
+        // Maintain cursor position (keep selection at start of first modified line)
+        requestAnimationFrame(() => {
+          if (textareaRef.current) {
+            // Calculate new cursor position - place at start of first modified line
+            const lineStart = newLines.slice(0, startLineIndex).join('\n').length + (startLineIndex > 0 ? 1 : 0);
+            textareaRef.current.selectionStart = textareaRef.current.selectionEnd = lineStart;
+            textareaRef.current.focus();
+          }
+        });
+        return;
+      }
+    };
+
+    // Use capture phase to intercept before other handlers
+    textarea.addEventListener('keydown', handleNativeKeyDown, true);
+
+    return () => {
+      textarea.removeEventListener('keydown', handleNativeKeyDown, true);
+    };
+  }, [value, onChange]);
+
   // Sync scroll between textarea and highlight overlay
   const syncScroll = useCallback(() => {
     if (textareaRef.current && highlightRef.current && lineNumbersRef.current) {
@@ -217,18 +416,44 @@ export const SQLHighlightedEditor = ({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const target = e.currentTarget;
+    const start = target.selectionStart;
+    const lines = value.split('\n');
+    const currentLineIndex = value.substring(0, start).split('\n').length - 1;
+    const currentLine = lines[currentLineIndex] || '';
+
+    // Note: Delete line (Ctrl+Shift+K) is handled by native event listener above
+    // to ensure it runs before React's synthetic event system
+
     // Execute query with Ctrl/Cmd + Enter
     if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
       e.preventDefault();
       onExecute();
+      return;
+    }
+
+    // Duplicate line: Ctrl+D
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d" && !e.shiftKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      const newLines = [...lines];
+      newLines.splice(currentLineIndex + 1, 0, currentLine);
+      const newValue = newLines.join('\n');
+      onChange(newValue);
+      
+      // Position cursor at the start of the duplicated line
+      const newCursorPos = start + currentLine.length + 1;
+      setTimeout(() => {
+        if (textareaRef.current) {
+          textareaRef.current.selectionStart = textareaRef.current.selectionEnd = newCursorPos;
+        }
+      }, 0);
+      return;
     }
 
     // Tab support
     if (e.key === "Tab") {
       e.preventDefault();
-      const target = e.currentTarget;
-      const start = target.selectionStart;
-      const end = target.selectionEnd;
       const newValue = value.substring(0, start) + "  " + value.substring(end);
       onChange(newValue);
       

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import ReactFlow, {
   Node,
   Edge,
@@ -25,9 +25,10 @@ import {
   Move,
   Grid3X3,
   Layers,
+  Loader2,
+  RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { mockTables } from "@/lib/mockData";
 import { FlowTableNode, TableNodeData } from "@/components/diagram/FlowTableNode";
 import { DiagramFilters } from "@/components/diagram/DiagramFilters";
 import { toast } from "sonner";
@@ -41,6 +42,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useQuery } from "@tanstack/react-query";
+import { useConnection } from "@/contexts/ConnectionContext";
+import { diagramService, schemasService } from "@/lib/api";
+import type { DiagramNode, DiagramEdge, Table } from "@/lib/api/types";
 
 const nodeTypes = {
   tableNode: FlowTableNode,
@@ -49,59 +54,226 @@ const nodeTypes = {
 const ERDiagramContent = () => {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const { fitView, zoomIn, zoomOut } = useReactFlow();
+  const { activeConnection } = useConnection();
   
   const [showRelationships, setShowRelationships] = useState(true);
   const [showIsolatedTables, setShowIsolatedTables] = useState(true);
-  const [selectedSchemas, setSelectedSchemas] = useState<string[]>(["public"]);
+  const [selectedSchemas, setSelectedSchemas] = useState<string[]>([]);
   const [currentLayout, setCurrentLayout] = useState<LayoutAlgorithm>("grid");
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
 
-  // Initialize nodes from mockTables
-  const initialNodes: Node<TableNodeData>[] = useMemo(() => {
-    return mockTables.map((table, idx) => {
-      const col = idx % 3;
-      const row = Math.floor(idx / 3);
+  // Fetch available schemas for filtering
+  const {
+    data: schemas = [],
+    isLoading: schemasLoading,
+  } = useQuery({
+    queryKey: ['schemas', activeConnection?.id],
+    queryFn: () => schemasService.getSchemas(activeConnection!.id),
+    enabled: !!activeConnection,
+    staleTime: 60000,
+  });
+
+  // Auto-select first schema if none selected and schemas are available
+  useEffect(() => {
+    if (selectedSchemas.length === 0 && schemas.length > 0 && !schemasLoading) {
+      setSelectedSchemas([schemas[0].name]);
+    }
+  }, [schemas, selectedSchemas.length, schemasLoading]);
+
+  // Fetch diagram data
+  const {
+    data: diagramData,
+    isLoading: diagramLoading,
+    error: diagramError,
+    refetch: refetchDiagram,
+  } = useQuery({
+    queryKey: ['diagram', activeConnection?.id, [...selectedSchemas].sort().join(','), showIsolatedTables],
+    queryFn: () => diagramService.getDiagram(activeConnection!.id, {
+      schemas: selectedSchemas.length > 0 ? selectedSchemas : undefined,
+      showIsolatedTables,
+    }),
+    enabled: !!activeConnection && selectedSchemas.length > 0,
+    staleTime: 60000, // 1 minute
+  });
+
+  // Transform API nodes to ReactFlow format
+  const apiNodes: Node<TableNodeData>[] = useMemo(() => {
+    if (!diagramData?.nodes || !Array.isArray(diagramData.nodes)) {
+      return [];
+    }
+    
+    return diagramData.nodes.map((apiNode: DiagramNode) => {
+      // Transform table data to match FlowTableNode expectations
+      const table: Table = {
+        id: apiNode.data.table.id,
+        name: apiNode.data.table.name,
+        schema: apiNode.data.table.schema,
+        rowCount: apiNode.data.table.rowCount || 0,
+        size: apiNode.data.table.size || "0 KB",
+        sizeBytes: 0,
+        columns: apiNode.data.table.columns || [],
+        indexes: apiNode.data.table.indexes || [],
+        foreignKeys: apiNode.data.table.foreignKeys || [],
+      };
+
       return {
-        id: table.id,
-        type: "tableNode",
-        position: { x: 100 + col * 400, y: 100 + row * 350 },
+        id: apiNode.id,
+        type: apiNode.type || "tableNode",
+        position: apiNode.position,
         data: {
           table,
-          isHighlighted: false,
+          isHighlighted: apiNode.data.isHighlighted || false,
         },
       };
     });
-  }, []);
+  }, [diagramData]);
 
-  // Initialize edges from foreign keys
-  const initialEdges: Edge[] = useMemo(() => {
-    const edges: Edge[] = [];
-    mockTables.forEach((table) => {
-      table.foreignKeys.forEach((fk) => {
-        const targetTable = mockTables.find((t) => t.name === fk.referencedTable);
-        if (targetTable) {
-          edges.push({
-            id: `${table.id}-${targetTable.id}-${fk.columns.join(",")}`,
-            source: table.id,
-            target: targetTable.id,
-            type: "smoothstep",
-            animated: false,
-            label: fk.columns.join(", "),
-            labelStyle: { fontSize: 10, fontWeight: 500 },
-            style: { stroke: "hsl(var(--primary))", strokeWidth: 2 },
-            markerEnd: {
-              type: MarkerType.ArrowClosed,
-              color: "hsl(var(--primary))",
-            },
-          });
+  // Transform API edges to ReactFlow format
+  const apiEdges: Edge[] = useMemo(() => {
+    if (!diagramData?.edges || !Array.isArray(diagramData.edges)) {
+      return [];
+    }
+    
+    return diagramData.edges.map((apiEdge: DiagramEdge) => ({
+      id: apiEdge.id,
+      source: apiEdge.source,
+      target: apiEdge.target,
+      type: apiEdge.type || "smoothstep",
+      animated: apiEdge.animated || false,
+      label: apiEdge.label,
+      labelStyle: apiEdge.labelStyle || { fontSize: 10, fontWeight: 500 },
+      style: {
+        stroke: "hsl(var(--primary))",
+        strokeWidth: 2,
+        opacity: 0.6,
+        ...apiEdge.style,
+      },
+      markerEnd: apiEdge.markerEnd || {
+        type: MarkerType.ArrowClosed,
+        color: "hsl(var(--primary))",
+      },
+    }));
+  }, [diagramData]);
+
+  // Initialize with empty arrays, will be updated when API data arrives
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
+
+  // Get storage key for this connection and schema combination
+  const storageKey = useMemo(() => {
+    if (!activeConnection?.id || selectedSchemas.length === 0) {
+      return null;
+    }
+    return `er-diagram-positions-${activeConnection.id}-${[...selectedSchemas].sort().join(',')}`;
+  }, [activeConnection?.id, selectedSchemas]);
+
+  // Load saved positions from localStorage
+  const loadSavedPositions = useCallback(() => {
+    if (!storageKey) return null;
+    try {
+      const saved = localStorage.getItem(storageKey);
+      if (saved) {
+        return JSON.parse(saved) as Record<string, { x: number; y: number }>;
+      }
+    } catch (error) {
+      console.error('Failed to load saved positions:', error);
+    }
+    return null;
+  }, [storageKey]);
+
+  // Save positions to localStorage
+  const savePositions = useCallback((nodePositions: Record<string, { x: number; y: number }>) => {
+    if (!storageKey || Object.keys(nodePositions).length === 0) return;
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(nodePositions));
+    } catch (error) {
+      console.error('Failed to save positions:', error);
+    }
+  }, [storageKey]);
+
+  // Clear saved positions (e.g., when applying a layout)
+  const clearSavedPositions = useCallback(() => {
+    if (!storageKey) return;
+    try {
+      localStorage.removeItem(storageKey);
+    } catch (error) {
+      console.error('Failed to clear saved positions:', error);
+    }
+  }, [storageKey]);
+
+  // Update nodes and edges when API data changes
+  useEffect(() => {
+    if (apiNodes.length === 0) {
+      setNodes([]);
+      setEdges([]);
+      return;
+    }
+
+    // Load saved positions
+    const savedPositions = loadSavedPositions();
+    
+    // Merge API nodes with saved positions (only for nodes that exist)
+    const nodesWithSavedPositions = apiNodes.map((node) => {
+      if (savedPositions && savedPositions[node.id]) {
+        return {
+          ...node,
+          position: savedPositions[node.id],
+        };
+      }
+      return node;
+    });
+    
+    // Clean up saved positions for nodes that no longer exist
+    if (savedPositions) {
+      const existingNodeIds = new Set(apiNodes.map(n => n.id));
+      const positionsToKeep: Record<string, { x: number; y: number }> = {};
+      Object.keys(savedPositions).forEach(nodeId => {
+        if (existingNodeIds.has(nodeId)) {
+          positionsToKeep[nodeId] = savedPositions[nodeId];
         }
       });
-    });
-    return edges;
-  }, []);
+      if (Object.keys(positionsToKeep).length !== Object.keys(savedPositions).length) {
+        // Some nodes were removed, update saved positions
+        if (Object.keys(positionsToKeep).length > 0) {
+          savePositions(positionsToKeep);
+        } else {
+          clearSavedPositions();
+        }
+      }
+    }
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+    setNodes(nodesWithSavedPositions);
+    setEdges(apiEdges);
+    
+    // Fit view after nodes are set (only if we have nodes and no saved positions)
+    // If we have saved positions, don't auto-fit as user has manually positioned nodes
+    if (apiNodes.length > 0 && !savedPositions) {
+      setTimeout(() => {
+        fitView({ duration: 400, padding: 0.1 });
+      }, 200);
+    }
+  }, [apiNodes, apiEdges, setNodes, setEdges, fitView, loadSavedPositions]);
+
+  // Save positions whenever nodes change (debounced)
+  useEffect(() => {
+    if (nodes.length === 0 || !storageKey) return;
+
+    // Debounce saving to avoid too many writes
+    const timeoutId = setTimeout(() => {
+      const positions: Record<string, { x: number; y: number }> = {};
+      nodes.forEach((node) => {
+        if (node.position) {
+          positions[node.id] = {
+            x: node.position.x,
+            y: node.position.y,
+          };
+        }
+      });
+      savePositions(positions);
+    }, 500); // Save 500ms after last change
+
+    return () => clearTimeout(timeoutId);
+  }, [nodes, storageKey, savePositions]);
 
   // Update highlighted state based on hover
   const updateHighlightedNodes = useCallback((nodeId: string | null) => {
@@ -273,6 +445,26 @@ const ERDiagramContent = () => {
     return showRelationships ? edges : [];
   }, [edges, showRelationships]);
 
+  // Handle refresh
+  const handleRefresh = useCallback(() => {
+    refetchDiagram();
+    toast.success("Diagram refreshed");
+  }, [refetchDiagram]);
+
+  // Handle isolated tables toggle - this will trigger a refetch
+  const handleToggleIsolatedTables = useCallback((value: boolean) => {
+    setShowIsolatedTables(value);
+  }, []);
+
+  const isLoading = diagramLoading || schemasLoading;
+  const hasError = !!diagramError;
+  const hasNoConnection = !activeConnection;
+  const hasNoSchemas = selectedSchemas.length === 0 && schemas.length > 0;
+
+  // Get schema names for filter
+  const schemaNames = useMemo(() => schemas.map(s => s.name), [schemas]);
+
+
   return (
     <div className="h-full flex flex-col bg-muted/20">
       <div className="border-b border-border bg-card px-6 py-4 animate-fade-in">
@@ -285,7 +477,7 @@ const ERDiagramContent = () => {
           </div>
           <div className="flex gap-2">
             <DiagramFilters
-              schemas={["public"]}
+              schemas={schemaNames}
               selectedSchemas={selectedSchemas}
               onToggleSchema={(schema) => {
                 setSelectedSchemas((prev) =>
@@ -297,8 +489,28 @@ const ERDiagramContent = () => {
               showRelationships={showRelationships}
               onToggleRelationships={setShowRelationships}
               showIsolatedTables={showIsolatedTables}
-              onToggleIsolatedTables={setShowIsolatedTables}
+              onToggleIsolatedTables={handleToggleIsolatedTables}
             />
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleRefresh}
+              disabled={!activeConnection || isLoading}
+              className="gap-2"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Loading...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-4 h-4" />
+                  Refresh
+                </>
+              )}
+            </Button>
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -358,24 +570,77 @@ const ERDiagramContent = () => {
       </div>
 
       <div className="flex-1 relative" ref={reactFlowWrapper}>
-        <ReactFlow
-          nodes={nodes}
-          edges={visibleEdges}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onNodeMouseEnter={onNodeMouseEnter}
-          onNodeMouseLeave={onNodeMouseLeave}
-          nodeTypes={nodeTypes}
-          connectionLineType={ConnectionLineType.SmoothStep}
-          fitView
-          minZoom={0.1}
-          maxZoom={2}
-          defaultEdgeOptions={{
-            type: "smoothstep",
-            animated: false,
-          }}
-          proOptions={{ hideAttribution: true }}
-        >
+        {hasNoConnection ? (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center text-muted-foreground">
+              <Layers className="w-16 h-16 mx-auto mb-4 opacity-20" />
+              <p className="text-lg font-semibold">No active connection</p>
+              <p className="text-sm mt-1">Please connect to a database first</p>
+            </div>
+          </div>
+        ) : hasNoSchemas ? (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center text-muted-foreground">
+              <Layers className="w-16 h-16 mx-auto mb-4 opacity-20" />
+              <p className="text-lg font-semibold">No schemas selected</p>
+              <p className="text-sm mt-1">Select at least one schema to view the diagram</p>
+            </div>
+          </div>
+        ) : isLoading ? (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center">
+              <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-primary" />
+              <p className="text-muted-foreground">Loading diagram...</p>
+            </div>
+          </div>
+        ) : hasError ? (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center text-destructive">
+              <Layers className="w-16 h-16 mx-auto mb-4 opacity-20" />
+              <p className="text-lg font-semibold">Failed to load diagram</p>
+              <p className="text-sm mt-1">
+                {diagramError instanceof Error
+                  ? diagramError.message
+                  : "Unknown error occurred"}
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                className="mt-4 gap-2"
+              >
+                <RefreshCw className="w-4 h-4" />
+                Try Again
+              </Button>
+            </div>
+          </div>
+        ) : nodes.length === 0 ? (
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="text-center text-muted-foreground">
+              <Layers className="w-16 h-16 mx-auto mb-4 opacity-20" />
+              <p className="text-lg font-semibold">No tables found</p>
+              <p className="text-sm mt-1">No tables match the selected filters</p>
+            </div>
+          </div>
+        ) : (
+          <ReactFlow
+            nodes={nodes}
+            edges={visibleEdges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onNodeMouseEnter={onNodeMouseEnter}
+            onNodeMouseLeave={onNodeMouseLeave}
+            nodeTypes={nodeTypes}
+            connectionLineType={ConnectionLineType.SmoothStep}
+            fitView
+            minZoom={0.1}
+            maxZoom={2}
+            defaultEdgeOptions={{
+              type: "smoothstep",
+              animated: false,
+            }}
+            proOptions={{ hideAttribution: true }}
+          >
           <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
           <Controls showInteractive={false} />
           <MiniMap
@@ -399,12 +664,13 @@ const ERDiagramContent = () => {
               <div className="flex items-center gap-2">
                 <Move className="w-4 h-4 text-muted-foreground" />
                 <span className="text-muted-foreground">
-                  Drag tables • Mouse wheel to zoom • {mockTables.length} tables
+                  Drag tables • Mouse wheel to zoom • {nodes.length} table{nodes.length !== 1 ? 's' : ''}
                 </span>
               </div>
             </div>
           </Panel>
         </ReactFlow>
+        )}
       </div>
     </div>
   );

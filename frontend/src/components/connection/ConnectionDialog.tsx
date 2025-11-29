@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,19 +17,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
-import { Database, Loader2, CheckCircle2, XCircle, Plus } from "lucide-react";
+import { Database, Loader2, CheckCircle2, XCircle } from "lucide-react";
+import type { Connection, CreateConnectionDto, UpdateConnectionDto } from "@/lib/api/types";
+import { connectionsService } from "@/lib/api/services/connections.service";
 import { toast } from "sonner";
 
 interface ConnectionDialogProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  connection?: Connection | null;
+  onSuccess?: () => void;
   children?: React.ReactNode;
 }
 
-export const ConnectionDialog = ({ children }: ConnectionDialogProps) => {
-  const [open, setOpen] = useState(false);
+export const ConnectionDialog = ({
+  open: controlledOpen,
+  onOpenChange,
+  connection,
+  onSuccess,
+  children,
+}: ConnectionDialogProps) => {
+  const [open, setOpen] = useState(controlledOpen ?? false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<"success" | "error" | null>(null);
-  
+  const queryClient = useQueryClient();
+  const isEditMode = !!connection;
+
   const [formData, setFormData] = useState({
     name: "",
     host: "localhost",
@@ -37,65 +50,181 @@ export const ConnectionDialog = ({ children }: ConnectionDialogProps) => {
     database: "",
     username: "",
     password: "",
-    sslMode: "prefer",
+    sslMode: "prefer" as const,
+  });
+
+  // Update form data when connection prop changes (edit mode)
+  useEffect(() => {
+    if (connection) {
+      setFormData({
+        name: connection.name,
+        host: connection.host,
+        port: connection.port.toString(),
+        database: connection.database,
+        username: connection.username,
+        password: "", // Never pre-fill password
+        sslMode: "prefer" as const, // Default, will need to get from backend if available
+      });
+    } else {
+      // Reset form for new connection
+      setFormData({
+        name: "",
+        host: "localhost",
+        port: "5432",
+        database: "",
+        username: "",
+        password: "",
+        sslMode: "prefer" as const,
+      });
+    }
+    setTestResult(null);
+  }, [connection, open]);
+
+  // Sync controlled open state
+  useEffect(() => {
+    if (controlledOpen !== undefined) {
+      setOpen(controlledOpen);
+    }
+  }, [controlledOpen]);
+
+  const handleOpenChange = (newOpen: boolean) => {
+    setOpen(newOpen);
+    onOpenChange?.(newOpen);
+    if (!newOpen) {
+      setTestResult(null);
+      setTesting(false);
+    }
+  };
+
+  // Test connection mutation (only works for existing connections)
+  const testMutation = useMutation({
+    mutationFn: (id: string) => connectionsService.test(id),
+    onSuccess: (result) => {
+      setTestResult(result.success ? "success" : "error");
+      toast[result.success ? "success" : "error"](
+        result.success
+          ? `Connection successful! (${result.connectionTime}ms)`
+          : result.message || "Connection failed. Please check your credentials."
+      );
+    },
+    onError: (error: any) => {
+      setTestResult("error");
+      toast.error(error.message || "Connection test failed");
+    },
+  });
+
+  // Create connection mutation
+  const createMutation = useMutation({
+    mutationFn: (data: CreateConnectionDto) => connectionsService.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['connections'] });
+      toast.success(`Connection "${formData.name}" created successfully`);
+      handleOpenChange(false);
+      onSuccess?.();
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to create connection");
+    },
+  });
+
+  // Update connection mutation
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateConnectionDto }) =>
+      connectionsService.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['connections'] });
+      toast.success(`Connection "${formData.name}" updated successfully`);
+      handleOpenChange(false);
+      onSuccess?.();
+    },
+    onError: (error: any) => {
+      toast.error(error.message || "Failed to update connection");
+    },
   });
 
   const handleTest = async () => {
+    if (!connection?.id) {
+      toast.error("Please save the connection first before testing");
+      return;
+    }
+
     setTesting(true);
     setTestResult(null);
     
-    // Simulate connection test
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    const success = Math.random() > 0.3; // Mock success/failure
-    setTestResult(success ? "success" : "error");
-    setTesting(false);
-    
-    toast[success ? "success" : "error"](
-      success ? "Connection successful!" : "Connection failed. Please check your credentials."
-    );
+    testMutation.mutate(connection.id, {
+      onSettled: () => {
+        setTesting(false);
+      },
+    });
   };
 
   const handleSave = () => {
+    // Validation
     if (!formData.name || !formData.host || !formData.database || !formData.username) {
       toast.error("Please fill in all required fields");
       return;
     }
-    
-    toast.success(`Connection "${formData.name}" saved successfully`);
-    setOpen(false);
-    
-    // Reset form
-    setFormData({
-      name: "",
-      host: "localhost",
-      port: "5432",
-      database: "",
-      username: "",
-      password: "",
-      sslMode: "prefer",
-    });
-    setTestResult(null);
+
+    const port = parseInt(formData.port, 10);
+    if (isNaN(port) || port < 1 || port > 65535) {
+      toast.error("Please enter a valid port number (1-65535)");
+      return;
+    }
+
+    if (!isEditMode && !formData.password) {
+      toast.error("Password is required for new connections");
+      return;
+    }
+
+    if (isEditMode && connection) {
+      // Update existing connection
+      const updateData: UpdateConnectionDto = {
+        name: formData.name,
+        host: formData.host,
+        port,
+        database: formData.database,
+        username: formData.username,
+        sslMode: formData.sslMode,
+      };
+
+      // Only include password if it's been changed
+      if (formData.password) {
+        updateData.password = formData.password;
+      }
+
+      updateMutation.mutate({ id: connection.id, data: updateData });
+    } else {
+      // Create new connection
+      const createData: CreateConnectionDto = {
+        name: formData.name,
+        host: formData.host,
+        port,
+        database: formData.database,
+        username: formData.username,
+        password: formData.password,
+        sslMode: formData.sslMode,
+      };
+
+      createMutation.mutate(createData);
+    }
   };
 
+  const isLoading = createMutation.isPending || updateMutation.isPending;
+  const canTest = isEditMode && connection?.id && !isLoading;
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        {children || (
-          <Button className="gap-2">
-            <Plus className="w-4 h-4" />
-            Add Connection
-          </Button>
-        )}
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      {children && <>{children}</>}
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Database className="w-5 h-5 text-primary" />
-            New Database Connection
+            {isEditMode ? "Edit Database Connection" : "New Database Connection"}
           </DialogTitle>
           <DialogDescription>
-            Configure your PostgreSQL database connection. All fields are required except SSL mode.
+            {isEditMode
+              ? "Update your PostgreSQL database connection settings."
+              : "Configure your PostgreSQL database connection. All fields are required except SSL mode."}
           </DialogDescription>
         </DialogHeader>
 
@@ -157,11 +286,13 @@ export const ConnectionDialog = ({ children }: ConnectionDialogProps) => {
             </div>
 
             <div>
-              <Label htmlFor="password">Password *</Label>
+              <Label htmlFor="password">
+                Password {isEditMode ? "(leave empty to keep current)" : "*"}
+              </Label>
               <Input
                 id="password"
                 type="password"
-                placeholder="••••••••"
+                placeholder={isEditMode ? "•••••••• (unchanged)" : "••••••••"}
                 value={formData.password}
                 onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                 className="mt-1.5"
@@ -187,11 +318,13 @@ export const ConnectionDialog = ({ children }: ConnectionDialogProps) => {
           </div>
 
           {testResult && (
-            <div className={`flex items-center gap-2 p-3 rounded-md ${
-              testResult === "success" 
-                ? "bg-success/10 text-success border border-success/20" 
-                : "bg-destructive/10 text-destructive border border-destructive/20"
-            }`}>
+            <div
+              className={`flex items-center gap-2 p-3 rounded-md ${
+                testResult === "success"
+                  ? "bg-success/10 text-success border border-success/20"
+                  : "bg-destructive/10 text-destructive border border-destructive/20"
+              }`}
+            >
               {testResult === "success" ? (
                 <>
                   <CheckCircle2 className="w-4 h-4" />
@@ -200,7 +333,11 @@ export const ConnectionDialog = ({ children }: ConnectionDialogProps) => {
               ) : (
                 <>
                   <XCircle className="w-4 h-4" />
-                  <span className="text-sm font-medium">Connection failed</span>
+                  <span className="text-sm font-medium">
+                    {testMutation.error instanceof Error
+                      ? testMutation.error.message
+                      : "Connection failed"}
+                  </span>
                 </>
               )}
             </div>
@@ -208,8 +345,12 @@ export const ConnectionDialog = ({ children }: ConnectionDialogProps) => {
         </div>
 
         <div className="flex justify-between pt-4 border-t">
-          <Button variant="outline" onClick={handleTest} disabled={testing}>
-            {testing ? (
+          <Button
+            variant="outline"
+            onClick={handleTest}
+            disabled={!canTest || testing || testMutation.isPending}
+          >
+            {testing || testMutation.isPending ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 Testing...
@@ -218,12 +359,24 @@ export const ConnectionDialog = ({ children }: ConnectionDialogProps) => {
               "Test Connection"
             )}
           </Button>
+          {!canTest && isEditMode && (
+            <p className="text-sm text-muted-foreground self-center">
+              Save changes first to test connection
+            </p>
+          )}
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isLoading}>
               Cancel
             </Button>
-            <Button onClick={handleSave}>
-              Save Connection
+            <Button onClick={handleSave} disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  {isEditMode ? "Updating..." : "Creating..."}
+                </>
+              ) : (
+                isEditMode ? "Update Connection" : "Create Connection"
+              )}
             </Button>
           </div>
         </div>

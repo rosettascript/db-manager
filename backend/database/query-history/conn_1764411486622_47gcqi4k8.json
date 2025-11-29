@@ -1,0 +1,83 @@
+[
+  {
+    "connectionId": "conn_1764411486622_47gcqi4k8",
+    "query": "select * from gis_barangay where name = :name",
+    "timestamp": "2025-11-29T19:59:06.000Z",
+    "executionTime": 29,
+    "rowCount": 3,
+    "success": true,
+    "id": "q_1764446346000_8pkve8mmq"
+  },
+  {
+    "connectionId": "conn_1764411486622_47gcqi4k8",
+    "query": "INSERT INTO archives (\n    id,\n    barangay_id,\n    title,\n    document_type,\n    description,\n    author,\n    signatory,\n    relate_resident,\n    file_path,\n    created_at,\n    updated_at\n) VALUES (\n    nextval('archives_id_seq'),\n    1,\n    'Certificate of Residency',\n    'Official Document',\n    'This document certifies that the individual is a resident of the barangay.',\n    'Juan Dela Cruz',\n    'Barangay Captain',\n    'resident',\n    '/uploads/documents/residency_123.pdf',\n    CURRENT_TIMESTAMP,\n    CURRENT_TIMESTAMP\n);\n",
+    "timestamp": "2025-11-29T18:28:49.648Z",
+    "executionTime": 45,
+    "rowsAffected": 1,
+    "success": true,
+    "id": "q_1764440929648_tsy1fg3s6"
+  },
+  {
+    "connectionId": "conn_1764411486622_47gcqi4k8",
+    "query": "select * from api_keys;",
+    "timestamp": "2025-11-29T14:20:13.512Z",
+    "executionTime": 1,
+    "rowCount": 1,
+    "success": true,
+    "id": "q_1764426013512_58maxv7cc"
+  },
+  {
+    "connectionId": "conn_1764411486622_47gcqi4k8",
+    "query": "delete api_keys where id='2fec76105c036a69dd5becc5e550289e6b4e5e70f74baba44db30382e9ba6236';\n",
+    "timestamp": "2025-11-29T14:10:53.610Z",
+    "executionTime": 12,
+    "success": false,
+    "error": "syntax error at or near \"api_keys\"",
+    "id": "q_1764425453610_34jh3f930"
+  },
+  {
+    "connectionId": "conn_1764411486622_47gcqi4k8",
+    "query": "select * from api_keys;",
+    "timestamp": "2025-11-29T14:09:57.375Z",
+    "executionTime": 1,
+    "rowCount": 1,
+    "success": true,
+    "id": "q_1764425397375_w44p8c1by"
+  },
+  {
+    "connectionId": "conn_1764411486622_47gcqi4k8",
+    "query": "select * from gis_barangay;",
+    "timestamp": "2025-11-29T14:08:51.990Z",
+    "executionTime": 46,
+    "rowCount": 607,
+    "success": true,
+    "id": "q_1764425331990_hx5pi3kof"
+  },
+  {
+    "connectionId": "conn_1764411486622_47gcqi4k8",
+    "query": "select * from gis_barangays;",
+    "timestamp": "2025-11-29T14:08:44.813Z",
+    "executionTime": 1,
+    "success": false,
+    "error": "relation \"gis_barangays\" does not exist",
+    "id": "q_1764425324813_xywmk2qsr"
+  },
+  {
+    "connectionId": "conn_1764411486622_47gcqi4k8",
+    "query": "select * from users;",
+    "timestamp": "2025-11-29T14:08:13.689Z",
+    "executionTime": 1,
+    "rowCount": 2,
+    "success": true,
+    "id": "q_1764425293689_tyvo4rxzy"
+  },
+  {
+    "connectionId": "conn_1764411486622_47gcqi4k8",
+    "query": "select * from families;",
+    "timestamp": "2025-11-29T14:08:01.453Z",
+    "executionTime": 1,
+    "rowCount": 0,
+    "success": true,
+    "id": "q_1764425281453_tv9b1vwlm"
+  }
+]

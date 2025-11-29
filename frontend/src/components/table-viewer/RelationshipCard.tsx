@@ -8,31 +8,43 @@ import { ForeignKey } from "@/lib/mockData";
 interface RelationshipCardProps {
   foreignKey: ForeignKey;
   currentTable: string;
+  currentSchema: string;
   isIncoming?: boolean;
   referencingTable?: string;
+  referencingSchema?: string;
+  referencedSchema?: string;
   relatedRowCount?: number;
 }
 
 export const RelationshipCard = ({
   foreignKey,
   currentTable,
+  currentSchema,
   isIncoming = false,
   referencingTable,
+  referencingSchema,
+  referencedSchema,
   relatedRowCount,
 }: RelationshipCardProps) => {
   const navigate = useNavigate();
-  const targetTable = isIncoming ? referencingTable : foreignKey.referencedTable;
+  
+  // Construct target table ID in schema.tableName format
+  const targetTableId = isIncoming 
+    ? (referencingTable && referencingSchema ? `${referencingSchema}.${referencingTable}` : referencingTable)
+    : (foreignKey.referencedTable && (foreignKey.referencedSchema || referencedSchema || currentSchema) 
+        ? `${foreignKey.referencedSchema || referencedSchema || currentSchema}.${foreignKey.referencedTable}` 
+        : foreignKey.referencedTable);
 
   const handleNavigate = () => {
-    if (targetTable) {
-      navigate(`/table/${targetTable}`);
+    if (targetTableId) {
+      navigate(`/table/${targetTableId}`);
     }
   };
 
   const handleOpenNewTab = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (targetTable) {
-      window.open(`/table/${targetTable}`, '_blank');
+    if (targetTableId) {
+      window.open(`/table/${targetTableId}`, '_blank');
     }
   };
 

@@ -1,0 +1,146 @@
+[
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "CREATE TABLE fake (\n    id CHAR(36) PRIMARY KEY,\n    name VARCHAR(255)\n);\n",
+    "timestamp": "2025-11-29T19:50:14.302Z",
+    "executionTime": 24,
+    "rowsAffected": 0,
+    "success": true,
+    "id": "q_1764445814302_5sgid4a6j"
+  },
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "alter table users add column logs string\n",
+    "timestamp": "2025-11-29T19:49:06.416Z",
+    "executionTime": 23,
+    "success": false,
+    "error": "type \"string\" does not exist",
+    "id": "q_1764445746416_fwjt7ybu9"
+  },
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "select * from users where email = :email",
+    "timestamp": "2025-11-29T19:45:01.123Z",
+    "executionTime": 13,
+    "rowCount": 1,
+    "success": true,
+    "id": "q_1764445501123_vcuj1d1nn"
+  },
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "INSERT INTO users (\n    id,\n    uuid,\n    username,\n    email,\n    password_hash,\n    role,\n    is_active,\n    failed_login_attempts,\n    locked_until,\n    created_at,\n    updated_at,\n    last_login_at\n) VALUES (\n    nextval('users_id_seq'),\n    uuid_generate_v4(),\n    'john_doe',\n    'john@example.com',\n    '$2b$12$examplehashedpassword',\n    'user',\n    true,\n    0,\n    NULL,\n    CURRENT_TIMESTAMP,\n    CURRENT_TIMESTAMP,\n    NULL\n);\n",
+    "timestamp": "2025-11-29T18:02:16.389Z",
+    "executionTime": 12,
+    "rowsAffected": 1,
+    "success": true,
+    "id": "q_1764439336389_ss7u09rbd"
+  },
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "INSERT INTO users (\n    id,\n    uuid,\n    username,\n    email,\n    password_hash,\n    role,\n    is_active,\n    failed_login_attempts,\n    locked_until,\n    created_at,\n    updated_at,\n    last_login_at\n) VALUES (\n    nextval('users_id_seq'),\n    uuid_generate_v4(),\n    'john_doe',\n    'john@example.com',\n    '$2b$12$examplehashedpassword',\n    'user',\n    true,\n    0,\n    NULL,\n    CURRENT_TIMESTAMP,\n    CURRENT_TIMESTAMP,\n    NULL\n);\n",
+    "timestamp": "2025-11-29T17:57:15.822Z",
+    "executionTime": 7,
+    "rowsAffected": 1,
+    "success": true,
+    "id": "q_1764439035822_4qhu98g5u"
+  },
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "INSERT INTO users (\n    id,\n    uuid,\n    username,\n    email,\n    password_hash,\n    role,\n    is_active,\n    failed_login_attempts,\n    locked_until,\n    created_at,\n    updated_at,\n    last_login_at\n) VALUES (\n    nextval('users_id_seq'),\n    uuid_generate_v4(),\n    'john_doe',\n    'john@example.com',\n    '$2b$12$examplehashedpassword',\n    'user',\n    true,\n    0,\n    NULL,\n    CURRENT_TIMESTAMP,\n    CURRENT_TIMESTAMP,\n    NULL\n);\n",
+    "timestamp": "2025-11-29T17:56:25.492Z",
+    "executionTime": 64,
+    "rowsAffected": 1,
+    "success": true,
+    "id": "q_1764438985492_rung9lxwp"
+  },
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "select * from users;",
+    "timestamp": "2025-11-29T17:36:25.642Z",
+    "executionTime": 2,
+    "rowCount": 1,
+    "success": true,
+    "id": "q_1764437785642_l4n0l2mjq"
+  },
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "select * from users where email='admin@yourdomain.com';",
+    "timestamp": "2025-11-29T15:12:21.930Z",
+    "executionTime": 7,
+    "rowCount": 1,
+    "success": true,
+    "id": "q_1764429141930_zioczxvrt"
+  },
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "dasdasdas",
+    "timestamp": "2025-11-29T15:10:25.098Z",
+    "executionTime": 0,
+    "success": false,
+    "error": "syntax error at or near \"dasdasdas\"",
+    "id": "q_1764429025098_cv732iczj"
+  },
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "dasdasdas",
+    "timestamp": "2025-11-29T15:10:24.888Z",
+    "executionTime": 6,
+    "success": false,
+    "error": "syntax error at or near \"dasdasdas\"",
+    "id": "q_1764429024888_3dwpvo7u0"
+  },
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "dasdasdas",
+    "timestamp": "2025-11-29T15:10:24.666Z",
+    "executionTime": 1,
+    "success": false,
+    "error": "syntax error at or near \"dasdasdas\"",
+    "id": "q_1764429024666_ukt5n8tyu"
+  },
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "dasdasdas",
+    "timestamp": "2025-11-29T15:10:24.427Z",
+    "executionTime": 1,
+    "success": false,
+    "error": "syntax error at or near \"dasdasdas\"",
+    "id": "q_1764429024427_r7rehjn7h"
+  },
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "dasdasdas",
+    "timestamp": "2025-11-29T15:10:24.135Z",
+    "executionTime": 0,
+    "success": false,
+    "error": "syntax error at or near \"dasdasdas\"",
+    "id": "q_1764429024135_oung6uuq3"
+  },
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "dasdasdas",
+    "timestamp": "2025-11-29T15:10:23.634Z",
+    "executionTime": 0,
+    "success": false,
+    "error": "syntax error at or near \"dasdasdas\"",
+    "id": "q_1764429023634_yois55qtp"
+  },
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "dasdasdas",
+    "timestamp": "2025-11-29T15:10:22.834Z",
+    "executionTime": 0,
+    "success": false,
+    "error": "syntax error at or near \"dasdasdas\"",
+    "id": "q_1764429022834_ns1ijx3hh"
+  },
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "dasdasdas",
+    "timestamp": "2025-11-29T15:10:19.336Z",
+    "executionTime": 12,
+    "success": false,
+    "error": "syntax error at or near \"dasdasdas\"",
+    "id": "q_1764429019336_mdpvj1k36"
+  }
+]

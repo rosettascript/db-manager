@@ -1,0 +1,218 @@
+[
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "SELECT COUNT(*) FROM public._prisma_migrations",
+    "timestamp": "2025-11-29T20:11:22.687Z",
+    "executionTime": 7,
+    "rowCount": 1,
+    "success": true,
+    "id": "q_1764447082687_h3nnn6hfd"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "select * from users where email = :email",
+    "timestamp": "2025-11-29T19:40:46.686Z",
+    "executionTime": 3,
+    "rowCount": 1,
+    "success": true,
+    "id": "q_1764445246686_roasr9j6p"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "SELECT 1 as test",
+    "timestamp": "2025-11-29T19:34:26.959Z",
+    "executionTime": 19,
+    "rowCount": 1,
+    "success": true,
+    "id": "q_1764444866959_9p7u8bnt8"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "select * from users where email = :email",
+    "timestamp": "2025-11-29T19:33:49.183Z",
+    "executionTime": 13,
+    "rowCount": 1,
+    "success": true,
+    "id": "q_1764444829183_51n3q7qpv"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "select * from users where email = :email",
+    "timestamp": "2025-11-29T19:27:46.947Z",
+    "executionTime": 20,
+    "rowCount": 1,
+    "success": true,
+    "id": "q_1764444466947_z1qimxaid"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "select * from users where email = :email",
+    "timestamp": "2025-11-29T19:23:15.585Z",
+    "executionTime": 16,
+    "rowCount": 1,
+    "success": true,
+    "id": "q_1764444195585_tam0tns5a"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "select *\nfrom users\nwhere email = :email",
+    "timestamp": "2025-11-29T19:19:35.205Z",
+    "executionTime": 10,
+    "rowCount": 1,
+    "success": true,
+    "id": "q_1764443975205_tg7r3f23j"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "select * from users where email = :email",
+    "timestamp": "2025-11-29T19:15:40.115Z",
+    "executionTime": 20,
+    "rowCount": 1,
+    "success": true,
+    "id": "q_1764443740115_2vn14h6oe"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "SELECT * FROM users WHERE email = :email",
+    "timestamp": "2025-11-29T19:07:41.648Z",
+    "executionTime": 16,
+    "rowCount": 0,
+    "success": true,
+    "id": "q_1764443261648_u6llg68x5"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "select * from arenas where arenas = :name;",
+    "timestamp": "2025-11-29T19:05:31.004Z",
+    "executionTime": 1,
+    "success": false,
+    "error": "input of anonymous composite types is not implemented",
+    "id": "q_1764443131004_bgg8h4kss"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "select * from arenas where arenas = :name;\n",
+    "timestamp": "2025-11-29T19:04:42.873Z",
+    "executionTime": 26,
+    "success": false,
+    "error": "input of anonymous composite types is not implemented",
+    "id": "q_1764443082873_oqyjcvx8i"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "select * from arenas where arenas = :name;",
+    "timestamp": "2025-11-29T19:03:37.913Z",
+    "executionTime": 22,
+    "success": false,
+    "error": "input of anonymous composite types is not implemented",
+    "id": "q_1764443017913_ozmijkca5"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "sadas",
+    "timestamp": "2025-11-29T17:07:24.518Z",
+    "executionTime": 21,
+    "success": false,
+    "error": "syntax error at or near \"sadas\"",
+    "id": "q_1764436044518_71je7lvaj"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "select * from users where email='operator@galleradeborongan.com';\n",
+    "timestamp": "2025-11-29T15:05:39.076Z",
+    "executionTime": 3,
+    "rowCount": 1,
+    "success": true,
+    "id": "q_1764428739076_pljn0pgkh"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "drop table test_2510cf01dac54cd19f5b68beb7143892.events;",
+    "timestamp": "2025-11-29T15:04:18.910Z",
+    "executionTime": 2,
+    "success": false,
+    "error": "cannot drop table test_2510cf01dac54cd19f5b68beb7143892.events because other objects depend on it",
+    "id": "q_1764428658910_apuq5c1em"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "drop table test_2510cf01dac54cd19f5b68beb7143892.events;",
+    "timestamp": "2025-11-29T15:03:59.932Z",
+    "executionTime": 16,
+    "success": false,
+    "error": "cannot drop table test_2510cf01dac54cd19f5b68beb7143892.events because other objects depend on it",
+    "id": "q_1764428639932_a8zr37g03"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "SELECT id, migration_name FROM public._prisma_migrations LIMIT 3",
+    "timestamp": "2025-11-29T14:41:13.971Z",
+    "executionTime": 1,
+    "rowCount": 3,
+    "success": true,
+    "id": "q_1764427273971_ni78gmpxa"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "\\dt",
+    "timestamp": "2025-11-29T14:24:26.795Z",
+    "executionTime": 5,
+    "success": false,
+    "error": "syntax error at or near \"\\\"",
+    "id": "q_1764426266795_uxtliu82g"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "SELECT 1 as test",
+    "timestamp": "2025-11-29T14:20:29.545Z",
+    "executionTime": 1,
+    "rowCount": 1,
+    "success": true,
+    "id": "q_1764426029545_gxt2148un"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "SELECT 1 as test",
+    "timestamp": "2025-11-29T08:58:34.470Z",
+    "executionTime": 1,
+    "rowCount": 1,
+    "success": true,
+    "id": "q_1764406714470_fl72upjlh"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "SELECT 1 as test",
+    "timestamp": "2025-11-29T08:58:05.733Z",
+    "executionTime": 2,
+    "rowCount": 1,
+    "success": true,
+    "id": "q_1764406685733_ok4ue6hcs"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "SELECT 1 as test",
+    "timestamp": "2025-11-29T08:57:03.453Z",
+    "executionTime": 4,
+    "rowCount": 1,
+    "success": true,
+    "id": "q_1764406623453_q2dwmvt0v"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "SELECT * FROM public.users LIMIT 3",
+    "timestamp": "2025-11-29T08:43:45.318Z",
+    "executionTime": 1,
+    "rowCount": 3,
+    "success": true,
+    "id": "q_1764405825318_z78bk1h6c"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "SELECT * FROM public.users LIMIT 5",
+    "timestamp": "2025-11-29T08:43:42.246Z",
+    "executionTime": 2,
+    "rowCount": 5,
+    "success": true,
+    "id": "q_1764405822246_dp7npi81u"
+  }
+]

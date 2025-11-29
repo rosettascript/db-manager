@@ -3,7 +3,7 @@ import { Handle, Position, NodeProps } from "reactflow";
 import { Key, GripVertical } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Table } from "@/lib/mockData";
+import type { Table } from "@/lib/api/types";
 import { cn } from "@/lib/utils";
 
 export type TableNodeData = {

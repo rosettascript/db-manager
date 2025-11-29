@@ -1,33 +1,41 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Play, Clock, Trash2 } from "lucide-react";
+import { Play, Clock, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-
-interface QueryHistoryItem {
-  id: string;
-  query: string;
-  timestamp: Date;
-  executionTime: number;
-  rowsAffected: number;
-  success: boolean;
-}
+import { useQuery } from "@tanstack/react-query";
+import { queryHistoryService } from "@/lib/api";
+import type { QueryHistoryItem } from "@/lib/api/types";
+import { NoQueryHistoryEmptyState } from "@/components/empty/EmptyState";
 
 interface QueryHistoryProps {
-  history: QueryHistoryItem[];
+  connectionId: string;
   onLoadQuery: (query: string) => void;
   onClearHistory: () => void;
 }
 
-export const QueryHistory = ({ history, onLoadQuery, onClearHistory }: QueryHistoryProps) => {
-  if (history.length === 0) {
+export const QueryHistory = ({ connectionId, onLoadQuery, onClearHistory }: QueryHistoryProps) => {
+  const {
+    data: history = [],
+    isLoading,
+    refetch,
+  } = useQuery<QueryHistoryItem[]>({
+    queryKey: ['query-history', connectionId],
+    queryFn: () => queryHistoryService.getQueryHistory(connectionId, 50, 0),
+    staleTime: 10000, // 10 seconds
+  });
+
+  if (isLoading) {
     return (
-      <div className="text-center py-12 text-muted-foreground">
-        <Clock className="w-12 h-12 mx-auto mb-3 opacity-20" />
-        <p>No query history yet</p>
-        <p className="text-sm mt-1">Run a query to see it here</p>
+      <div className="text-center py-12">
+        <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-primary" />
+        <p className="text-muted-foreground">Loading query history...</p>
       </div>
     );
+  }
+
+  if (history.length === 0) {
+    return <NoQueryHistoryEmptyState />;
   }
 
   return (
@@ -47,46 +55,59 @@ export const QueryHistory = ({ history, onLoadQuery, onClearHistory }: QueryHist
         </Button>
       </div>
 
-      {history.map((item) => (
-        <Card
-          key={item.id}
-          className="cursor-pointer hover:border-primary/50 transition-colors"
-        >
-          <CardContent className="pt-4">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex-1 min-w-0">
-                <code className="text-sm font-mono block truncate">
-                  {item.query}
-                </code>
-                <div className="flex items-center gap-3 mt-2 flex-wrap">
-                  <span className="text-xs text-muted-foreground">
-                    {item.timestamp.toLocaleTimeString()}
-                  </span>
-                  <Badge
-                    variant={item.success ? "default" : "destructive"}
-                    className="text-xs"
-                  >
-                    {item.rowsAffected} rows
-                  </Badge>
-                  <Badge variant="outline" className="text-xs">
-                    {item.executionTime}ms
-                  </Badge>
+      {history.map((item) => {
+        const timestamp = new Date(item.timestamp);
+        const rowCount = item.rowCount || item.rowsAffected || 0;
+        
+        return (
+          <Card
+            key={item.id}
+            className="cursor-pointer hover:border-primary/50 transition-colors"
+          >
+            <CardContent className="pt-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <code className="text-sm font-mono block truncate">
+                    {item.query}
+                  </code>
+                  <div className="flex items-center gap-3 mt-2 flex-wrap">
+                    <span className="text-xs text-muted-foreground">
+                      {timestamp.toLocaleString()}
+                    </span>
+                    {item.success ? (
+                      <Badge variant="default" className="text-xs">
+                        {rowCount} rows
+                      </Badge>
+                    ) : (
+                      <Badge variant="destructive" className="text-xs">
+                        Failed
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="text-xs">
+                      {item.executionTime}ms
+                    </Badge>
+                    {item.error && (
+                      <Badge variant="destructive" className="text-xs">
+                        Error
+                      </Badge>
+                    )}
+                  </div>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    onLoadQuery(item.query);
+                    toast.success("Query loaded from history");
+                  }}
+                >
+                  <Play className="w-3 h-3" />
+                </Button>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => {
-                  onLoadQuery(item.query);
-                  toast.success("Query loaded from history");
-                }}
-              >
-                <Play className="w-3 h-3" />
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 };

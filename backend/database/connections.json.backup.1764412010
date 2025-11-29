@@ -1,0 +1,60 @@
+{
+  "connections": [
+    {
+      "id": "conn_1764400374810_5erv4j64z",
+      "name": "Test Schema DB",
+      "host": "localhost",
+      "port": 5432,
+      "database": "postgres",
+      "username": "postgres",
+      "password": "0e64c98e786bcba70f25f9c09dae0e32:fdc145607fd2bdf753180c5673363ced",
+      "sslMode": "prefer",
+      "status": "connected",
+      "createdAt": "2025-11-29T07:12:54.810Z",
+      "updatedAt": "2025-11-29T10:26:24.348Z",
+      "lastConnected": "2025-11-29T10:26:24.348Z"
+    },
+    {
+      "id": "conn_1764401629369_ayww2mbaq",
+      "name": "Sabong Test DB",
+      "host": "localhost",
+      "port": 5432,
+      "database": "sabong",
+      "username": "postgres",
+      "password": "661f15d0600b4853850ad668eb3143e4:39d5fae12683fb0a8b8e9bf26d35b234",
+      "sslMode": "allow",
+      "status": "connected",
+      "createdAt": "2025-11-29T07:33:49.369Z",
+      "updatedAt": "2025-11-29T10:26:12.786Z",
+      "lastConnected": "2025-11-29T10:26:12.786Z"
+    },
+    {
+      "id": "conn_1764410296101_ima5s1def",
+      "name": "Queuing System",
+      "host": "localhost",
+      "port": 5432,
+      "database": "queiung",
+      "username": "postgres",
+      "password": "4b114103eb819b864e26d2c7294b48ac:362b03d04000a043a358a93543a43723",
+      "sslMode": "prefer",
+      "status": "connected",
+      "createdAt": "2025-11-29T09:58:16.101Z",
+      "updatedAt": "2025-11-29T10:26:21.617Z",
+      "lastConnected": "2025-11-29T10:26:21.617Z"
+    },
+    {
+      "id": "conn_1764411486622_47gcqi4k8",
+      "name": "Bims Database",
+      "host": "localhost",
+      "port": 5432,
+      "database": " bims_production",
+      "username": "postgres",
+      "password": "52fa61a195dd3ae49a11efbfde12e752:3f2cca3f2f2d43a42c7a98ee775b00b4",
+      "sslMode": "prefer",
+      "status": "connected",
+      "createdAt": "2025-11-29T10:18:06.622Z",
+      "updatedAt": "2025-11-29T10:26:22.338Z",
+      "lastConnected": "2025-11-29T10:26:22.338Z"
+    }
+  ]
+}

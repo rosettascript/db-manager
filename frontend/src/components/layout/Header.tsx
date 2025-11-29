@@ -1,4 +1,5 @@
 import { Database, ChevronDown, Settings } from "lucide-react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -6,14 +7,21 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { mockConnections } from "@/lib/mockData";
-import { useState } from "react";
+import { useConnection } from "@/contexts/ConnectionContext";
 import { ConnectionManager } from "@/components/connection/ConnectionManager";
+import { ThemeToggle } from "@/components/theme";
+import { KeyboardShortcutsDialog } from "@/components/keyboard";
+import { Keyboard } from "lucide-react";
+import { useSettings } from "@/contexts/SettingsContext";
 
 export const Header = () => {
-  const [activeConnection, setActiveConnection] = useState(mockConnections[0]);
+  const { activeConnection, setActiveConnection, connections } = useConnection();
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const { open: openSettings } = useSettings();
 
   return (
+    <>
+      <KeyboardShortcutsDialog open={shortcutsOpen} onOpenChange={setShortcutsOpen} />
     <header className="h-14 border-b border-border bg-card flex items-center justify-between px-4">
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-2">
@@ -25,51 +33,80 @@ export const Header = () => {
       <div className="flex items-center gap-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="gap-2 min-w-[200px] justify-between">
+            <Button variant="outline" className="gap-2 min-w-[200px] justify-between" disabled={!activeConnection}>
               <div className="flex items-center gap-2">
-                <div
-                  className={`w-2 h-2 rounded-full ${
-                    activeConnection.status === "connected"
-                      ? "bg-success"
-                      : "bg-muted-foreground"
-                  }`}
-                />
-                <span className="font-medium">{activeConnection.name}</span>
+                {activeConnection && (
+                  <>
+                    <div
+                      className={`w-2 h-2 rounded-full ${
+                        activeConnection.status === "connected"
+                          ? "bg-success"
+                          : "bg-muted-foreground"
+                      }`}
+                    />
+                    <span className="font-medium">{activeConnection.name}</span>
+                  </>
+                )}
+                {!activeConnection && (
+                  <span className="text-muted-foreground">No connection</span>
+                )}
               </div>
               <ChevronDown className="w-4 h-4 opacity-50" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-[250px]">
-            {mockConnections.map((conn) => (
-              <DropdownMenuItem
-                key={conn.id}
-                onClick={() => setActiveConnection(conn)}
-                className="cursor-pointer"
-              >
-                <div className="flex items-center gap-2 w-full">
-                  <div
-                    className={`w-2 h-2 rounded-full ${
-                      conn.status === "connected" ? "bg-success" : "bg-muted-foreground"
-                    }`}
-                  />
-                  <div className="flex-1">
-                    <div className="font-medium">{conn.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {conn.host}:{conn.port}
+            {connections.length === 0 ? (
+              <DropdownMenuItem disabled className="text-muted-foreground">
+                No connections available
+              </DropdownMenuItem>
+            ) : (
+              connections.map((conn) => (
+                <DropdownMenuItem
+                  key={conn.id}
+                  onClick={() => setActiveConnection(conn)}
+                  className="cursor-pointer"
+                >
+                  <div className="flex items-center gap-2 w-full">
+                    <div
+                      className={`w-2 h-2 rounded-full ${
+                        conn.status === "connected" ? "bg-success" : "bg-muted-foreground"
+                      }`}
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium">{conn.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {conn.host}:{conn.port}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </DropdownMenuItem>
-            ))}
+                </DropdownMenuItem>
+              ))
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
 
+        <ThemeToggle />
+
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setShortcutsOpen(true)}
+          title="Keyboard Shortcuts (Ctrl+/)"
+        >
+          <Keyboard className="w-4 h-4" />
+        </Button>
+
         <ConnectionManager>
-          <Button variant="ghost" size="icon">
+          <Button 
+            variant="ghost" 
+            size="icon"
+            onClick={() => openSettings()}
+          >
             <Settings className="w-4 h-4" />
           </Button>
         </ConnectionManager>
       </div>
     </header>
+    </>
   );
 };

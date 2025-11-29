@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Sheet,
   SheetContent,
@@ -19,18 +19,16 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Filter, Plus, X } from "lucide-react";
-import { Column } from "@/lib/mockData";
+import type { Column, FilterRule } from "@/lib/api/types";
 
-interface FilterRule {
+interface FilterRuleWithId extends FilterRule {
   id: string;
-  column: string;
-  operator: string;
-  value: string;
 }
 
 interface DataFiltersProps {
   columns: Column[];
   onApplyFilters: (filters: FilterRule[]) => void;
+  initialFilters?: FilterRule[];
 }
 
 const operators = [
@@ -47,9 +45,22 @@ const operators = [
   { value: "is_not_null", label: "Is Not NULL" },
 ];
 
-export const DataFilters = ({ columns, onApplyFilters }: DataFiltersProps) => {
-  const [filters, setFilters] = useState<FilterRule[]>([]);
+export const DataFilters = ({ columns, onApplyFilters, initialFilters = [] }: DataFiltersProps) => {
+  const [filters, setFilters] = useState<FilterRuleWithId[]>(() => {
+    // Initialize filters with IDs from initialFilters
+    return initialFilters.map((f, idx) => ({
+      ...f,
+      id: `filter-${idx}-${Date.now()}`,
+    }));
+  });
   const [open, setOpen] = useState(false);
+
+  // Sync with initialFilters when they change externally
+  useEffect(() => {
+    if (initialFilters.length === 0 && filters.length > 0) {
+      setFilters([]);
+    }
+  }, [initialFilters.length]);
 
   const addFilter = () => {
     setFilters([
@@ -67,14 +78,16 @@ export const DataFilters = ({ columns, onApplyFilters }: DataFiltersProps) => {
     setFilters(filters.filter((f) => f.id !== id));
   };
 
-  const updateFilter = (id: string, field: keyof FilterRule, value: string) => {
+  const updateFilter = (id: string, field: keyof FilterRuleWithId, value: string) => {
     setFilters(
       filters.map((f) => (f.id === id ? { ...f, [field]: value } : f))
     );
   };
 
   const handleApply = () => {
-    onApplyFilters(filters);
+    // Convert filters with IDs to FilterRule (without id)
+    const filtersWithoutId: FilterRule[] = filters.map(({ id, ...filter }) => filter);
+    onApplyFilters(filtersWithoutId);
     setOpen(false);
   };
 

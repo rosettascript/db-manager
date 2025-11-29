@@ -1,0 +1,47 @@
+[
+  {
+    "connectionId": "conn_1764410296101_ima5s1def",
+    "query": "INSERT INTO public.great (id, name) VALUES\n(gen_random_uuid(), 'Alpha'),\n(gen_random_uuid(), 'Bravo'),\n(gen_random_uuid(), 'Charlie'),\n(gen_random_uuid(), 'Delta'),\n(gen_random_uuid(), 'Echo');\n",
+    "timestamp": "2025-11-29T18:26:56.250Z",
+    "executionTime": 23,
+    "rowsAffected": 5,
+    "success": true,
+    "id": "q_1764440816250_mqd6yiied"
+  },
+  {
+    "connectionId": "conn_1764410296101_ima5s1def",
+    "query": "INSERT INTO public.great (id, name) VALUES\n(uuid_generate_v4(), 'Alpha'),\n(uuid_generate_v4(), 'Bravo'),\n(uuid_generate_v4(), 'Charlie'),\n(uuid_generate_v4(), 'Delta'),\n(uuid_generate_v4(), 'Echo');\n",
+    "timestamp": "2025-11-29T18:26:24.144Z",
+    "executionTime": 17,
+    "success": false,
+    "error": "function uuid_generate_v4() does not exist",
+    "id": "q_1764440784144_1extv7g8y"
+  },
+  {
+    "connectionId": "conn_1764410296101_ima5s1def",
+    "query": "INSERT INTO public.great (id, name) VALUES\n(1, 'Alpha'),\n(2, 'Bravo'),\n(3, 'Charlie'),\n(4, 'Delta'),\n(5, 'Echo');\n",
+    "timestamp": "2025-11-29T18:25:57.924Z",
+    "executionTime": 20,
+    "success": false,
+    "error": "column \"id\" is of type uuid but expression is of type integer",
+    "id": "q_1764440757924_hjdg6iawy"
+  },
+  {
+    "connectionId": "conn_1764410296101_ima5s1def",
+    "query": "INSERT INTO public.great (id, uuid, name) VALUES\n(1, '550e8400-e29b-41d4-a716-446655440001', 'Alpha'),\n(2, '550e8400-e29b-41d4-a716-446655440002', 'Bravo'),\n(3, '550e8400-e29b-41d4-a716-446655440003', 'Charlie'),\n(4, '550e8400-e29b-41d4-a716-446655440004', 'Delta'),\n(5, '550e8400-e29b-41d4-a716-446655440005', 'Echo');\n",
+    "timestamp": "2025-11-29T18:24:58.169Z",
+    "executionTime": 1,
+    "success": false,
+    "error": "column \"uuid\" of relation \"great\" does not exist",
+    "id": "q_1764440698169_3toezcvyc"
+  },
+  {
+    "connectionId": "conn_1764410296101_ima5s1def",
+    "query": "INSERT INTO public.great (id, uuid, name) VALUES\n(1, '550e8400-e29b-41d4-a716-446655440001', 'Alpha'),\n(2, '550e8400-e29b-41d4-a716-446655440002', 'Bravo'),\n(3, '550e8400-e29b-41d4-a716-446655440003', 'Charlie'),\n(4, '550e8400-e29b-41d4-a716-446655440004', 'Delta'),\n(5, '550e8400-e29b-41d4-a716-446655440005', 'Echo');\n",
+    "timestamp": "2025-11-29T18:24:46.249Z",
+    "executionTime": 25,
+    "success": false,
+    "error": "column \"uuid\" of relation \"great\" does not exist",
+    "id": "q_1764440686249_c4ok4cm7g"
+  }
+]

@@ -11,37 +11,116 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Download, FileText, FileJson } from "lucide-react";
+import { Download, FileText, FileJson, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import type { ExportFormat, TableExportOptions, QueryExportOptions, FilterRule, SortOption } from "@/lib/api/types";
 
-interface ExportDialogProps {
+interface TableExportDialogProps {
   children?: React.ReactNode;
+  connectionId: string;
+  schema: string;
+  table: string;
   tableName?: string;
+  filters?: FilterRule[];
+  sort?: SortOption;
+  search?: string;
+  selectedColumns?: string[];
+  onExport?: () => void;
 }
 
-export const ExportDialog = ({ children, tableName }: ExportDialogProps) => {
-  const [format, setFormat] = useState("csv");
+interface QueryExportDialogProps {
+  children?: React.ReactNode;
+  connectionId: string;
+  query: string;
+  onExport?: () => void;
+}
+
+type ExportDialogProps = TableExportDialogProps | QueryExportDialogProps;
+
+const isTableExport = (props: ExportDialogProps): props is TableExportDialogProps => {
+  return 'schema' in props && 'table' in props;
+};
+
+export const ExportDialog = (props: ExportDialogProps) => {
+  const [format, setFormat] = useState<ExportFormat>("csv");
   const [includeHeaders, setIncludeHeaders] = useState(true);
   const [open, setOpen] = useState(false);
-
-  const handleExport = () => {
+  const [isExporting, setIsExporting] = useState(false);
+  
+  const isTable = isTableExport(props);
+  
+  const handleExport = async () => {
+    if (isExporting) return;
+    
+    setIsExporting(true);
     const formatLabel = format === "csv" ? "CSV" : "JSON";
-    toast.success(`Exporting ${tableName || "data"} as ${formatLabel}...`, {
-      description: "Download will start shortly",
-    });
     
-    // Simulate export
-    setTimeout(() => {
-      toast.success("Export completed!");
-    }, 1500);
-    
-    setOpen(false);
+    try {
+      const { exportService } = await import("@/lib/api");
+      
+      if (isTable) {
+        const options: TableExportOptions = {
+          format,
+          includeHeaders,
+          filters: props.filters,
+          sort: props.sort,
+          search: props.search,
+          selectedColumns: props.selectedColumns,
+        };
+        
+        toast.loading(`Exporting ${props.tableName || props.table} as ${formatLabel}...`, {
+          id: 'export-toast',
+        });
+        
+        await exportService.exportTableData(
+          props.connectionId,
+          props.schema,
+          props.table,
+          options,
+        );
+        
+        toast.success("Export completed!", {
+          id: 'export-toast',
+          description: "File download started",
+        });
+        
+        props.onExport?.();
+      } else {
+        const options: QueryExportOptions = {
+          format,
+          includeHeaders,
+          query: props.query,
+        };
+        
+        toast.loading(`Exporting query results as ${formatLabel}...`, {
+          id: 'export-toast',
+        });
+        
+        await exportService.exportQueryResults(props.connectionId, options);
+        
+        toast.success("Export completed!", {
+          id: 'export-toast',
+          description: "File download started",
+        });
+        
+        props.onExport?.();
+      }
+      
+      setOpen(false);
+    } catch (error: any) {
+      toast.error("Export failed", {
+        id: 'export-toast',
+        description: error.message || "An error occurred during export",
+      });
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        {children || (
+        {props.children || (
           <Button variant="outline" size="sm" className="gap-2">
             <Download className="w-4 h-4" />
             Export
@@ -107,12 +186,21 @@ export const ExportDialog = ({ children, tableName }: ExportDialogProps) => {
         </div>
 
         <div className="flex justify-end gap-2 pt-4 border-t">
-          <Button variant="outline" onClick={() => setOpen(false)}>
+          <Button variant="outline" onClick={() => setOpen(false)} disabled={isExporting}>
             Cancel
           </Button>
-          <Button onClick={handleExport} className="gap-2">
-            <Download className="w-4 h-4" />
-            Export
+          <Button onClick={handleExport} className="gap-2" disabled={isExporting}>
+            {isExporting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Exporting...
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4" />
+                Export
+              </>
+            )}
           </Button>
         </div>
       </DialogContent>

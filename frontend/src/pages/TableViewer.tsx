@@ -1,8 +1,10 @@
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
-import { Table2, Download, Filter, RefreshCcw, Key, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Search, Copy, Check } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Table2, Download, Filter, RefreshCcw, Key, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Search, Copy, Check, Loader2, AlertCircle, Trash2, Edit, Plus, X } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useKeyboardShortcut } from "@/hooks/useKeyboardShortcut";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,7 +18,14 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { mockTables, mockTableData } from "@/lib/mockData";
+import { useConnection } from "@/contexts/ConnectionContext";
+import { schemasService } from "@/lib/api/services/schemas.service";
+import { dataService } from "@/lib/api/services/data.service";
+import { chartsService } from "@/lib/api/services/charts.service";
+import type { Table as TableType, FilterRule, ChartOptions, ChartDataResponse } from "@/lib/api/types";
+import { ChartBuilder } from "@/components/charts/ChartBuilder";
+import { ChartViewer } from "@/components/charts/ChartViewer";
+import { BarChart3 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DataFilters } from "@/components/data-viewer/DataFilters";
 import { ExportDialog } from "@/components/data-viewer/ExportDialog";
@@ -24,46 +33,383 @@ import { ColumnManager } from "@/components/data-viewer/ColumnManager";
 import { TableBreadcrumb } from "@/components/table-viewer/TableBreadcrumb";
 import { RelationshipCard } from "@/components/table-viewer/RelationshipCard";
 import { ForeignKeyCell } from "@/components/table-viewer/ForeignKeyCell";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import { DeleteConfirmationDialog } from "@/components/table-viewer/DeleteConfirmationDialog";
+import { BulkUpdateDialog } from "@/components/table-viewer/BulkUpdateDialog";
+import { BulkActionsToolbar } from "@/components/table-viewer/BulkActionsToolbar";
+import { BulkExportDialog } from "@/components/table-viewer/BulkExportDialog";
+import { EditableCell } from "@/components/table-viewer/EditableCell";
+import { AddRowDialog } from "@/components/table-viewer/AddRowDialog";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { ShortcutTooltip } from "@/components/keyboard";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import { ErrorDisplay } from "@/components/error/ErrorDisplay";
+import { ConnectionErrorHandler } from "@/components/error/ConnectionErrorHandler";
+import { TableSkeleton } from "@/components/loading/LoadingSkeleton";
+import { cn } from "@/lib/utils";
 
 const TableViewer = () => {
   const { tableId } = useParams();
   const navigate = useNavigate();
-  const table = mockTables.find((t) => t.id === tableId);
-  
+  const location = useLocation();
+  const { activeConnection } = useConnection();
+  const queryClient = useQueryClient();
+
+  // Debug logging
+  useEffect(() => {
+    console.log('[TableViewer] tableId changed:', tableId);
+    console.log('[TableViewer] location.pathname:', location.pathname);
+  }, [tableId, location.pathname]);
+
+  // Parse tableId to extract schema and table name
+  // Format: "schema.tableName"
+  const parsedTable = useMemo(() => {
+    if (!tableId || typeof tableId !== 'string') {
+      console.log('[TableViewer] No tableId or invalid type');
+      return null;
+    }
+    try {
+      const parts = tableId.split('.');
+      if (!parts || parts.length < 2) {
+        console.log('[TableViewer] Invalid tableId format:', tableId);
+        return null;
+      }
+      const schema = parts[0]?.trim();
+      const tableNameParts = parts.slice(1);
+      if (!schema || tableNameParts.length === 0) {
+        console.log('[TableViewer] Missing schema or table name');
+        return null;
+      }
+      const tableName = tableNameParts.join('.').trim();
+      if (!tableName) {
+        console.log('[TableViewer] Empty table name');
+        return null;
+      }
+      const parsed = { schema, tableName, fullId: tableId };
+      console.log('[TableViewer] Parsed table:', parsed);
+      return parsed;
+    } catch (error) {
+      console.error('Error parsing tableId:', error, tableId);
+      return null;
+    }
+  }, [tableId]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [pageSize, setPageSize] = useState("100");
   const [currentPage, setCurrentPage] = useState(1);
   const [sortColumn, setSortColumn] = useState<string | null>(null);
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
   const [visibleColumns, setVisibleColumns] = useState<string[]>([]);
+  const [filters, setFilters] = useState<FilterRule[]>([]);
   const [copiedCell, setCopiedCell] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [renderTime, setRenderTime] = useState<number>(0);
   const [breadcrumbTrail, setBreadcrumbTrail] = useState<Array<{ id: string; name: string; schema: string }>>([]);
+  const [activeTab, setActiveTab] = useState<string>("data");
+  const [selectedRows, setSelectedRows] = useState<Set<string>>(new Set());
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  
+  // Row editing state
+  const [editMode, setEditMode] = useState(false);
+  const [editingCell, setEditingCell] = useState<{ rowId: string; columnName: string } | null>(null);
+  const [isSavingCell, setIsSavingCell] = useState(false);
+  const [addRowDialogOpen, setAddRowDialogOpen] = useState(false);
+  const [isInserting, setIsInserting] = useState(false);
+  
+  // Chart state
+  const [chartData, setChartData] = useState<ChartDataResponse | null>(null);
+  const [chartOptions, setChartOptions] = useState<ChartOptions | null>(null);
+  const [isGeneratingChart, setIsGeneratingChart] = useState(false);
   
   const parentRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Debounce search for better performance
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
-  if (!table) {
-    return <div className="p-6">Table not found</div>;
-  }
+  // Track previous tableId to detect changes
+  const prevTableIdRef = useRef<string | null>(null);
+  const prevPathnameRef = useRef<string | null>(null);
 
-  // Initialize visible columns and widths once
+  // Reset state and invalidate queries when tableId or pathname changes
   useEffect(() => {
-    if (visibleColumns.length === 0 && table.columns.length > 0) {
-      setVisibleColumns(table.columns.map(c => c.name));
-      const initialWidths: Record<string, number> = {};
-      table.columns.forEach(col => {
-        initialWidths[col.name] = 150; // Default width
-      });
-      setColumnWidths(initialWidths);
+    const pathnameChanged = prevPathnameRef.current !== location.pathname;
+    const tableIdChanged = tableId && prevTableIdRef.current !== tableId;
+    
+    if (tableIdChanged || pathnameChanged) {
+      console.log('[TableViewer] Route change detected:', { tableIdChanged, pathnameChanged, tableId, pathname: location.pathname });
+      
+      const prevTableId = prevTableIdRef.current;
+      prevTableIdRef.current = tableId || null;
+      prevPathnameRef.current = location.pathname;
+      
+      // Reset all state when navigating to a different table
+      setSearchQuery("");
+      setCurrentPage(1);
+      setSortColumn(null);
+      setSortDirection("asc");
+      setFilters([]);
+      setActiveTab("data");
+      setSelectedRows(new Set());
+      setEditMode(false);
+      setEditingCell(null);
+      setChartData(null);
+      setChartOptions(null);
+      
+      // Only invalidate if we have connection and parsed table
+      if (activeConnection && parsedTable) {
+        // Aggressively remove ALL table-related queries to force fresh fetch
+        queryClient.removeQueries({
+          predicate: (query) => {
+            const key = query.queryKey;
+            return Array.isArray(key) && (
+              key[0] === 'table-details' || 
+              key[0] === 'table-data'
+            );
+          },
+        });
+        
+        // Invalidate and remove queries for the previous table if it exists
+        if (prevTableId) {
+          try {
+            const parts = prevTableId.split('.');
+            if (parts.length >= 2) {
+              const prevSchema = parts[0];
+              const prevTableName = parts.slice(1).join('.');
+              queryClient.removeQueries({
+                queryKey: ['table-details', activeConnection.id, prevSchema, prevTableName],
+              });
+              queryClient.removeQueries({
+                queryKey: ['table-data', activeConnection.id, prevSchema, prevTableName],
+              });
+            }
+          } catch (error) {
+            console.error('Error invalidating previous table queries:', error);
+          }
+        }
+        
+        // Invalidate queries for the new table to force fresh fetch
+        console.log('[TableViewer] Invalidating queries for new table:', parsedTable);
+        queryClient.invalidateQueries({
+          queryKey: ['table-details', activeConnection.id, parsedTable.schema, parsedTable.tableName],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ['table-data', activeConnection.id, parsedTable.schema, parsedTable.tableName],
+        });
+      }
     }
-  }, [table.columns, visibleColumns.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tableId, location.pathname]); // Only depend on tableId and pathname to avoid infinite loops
+
+  // Fetch table details
+  const {
+    data: table,
+    isLoading: tableLoading,
+    isError: tableError,
+    error: tableErrorDetails,
+  } = useQuery<TableType>({
+    queryKey: ['table-details', activeConnection?.id, parsedTable?.schema, parsedTable?.tableName],
+    queryFn: () => schemasService.getTableDetails(
+      activeConnection!.id,
+      parsedTable!.schema,
+      parsedTable!.tableName,
+    ),
+    enabled: !!activeConnection && !!parsedTable,
+    staleTime: 300000, // Consider fresh for 5 minutes
+    gcTime: 300000, // Keep in cache for 5 minutes
+    refetchOnMount: 'always', // Always refetch when component mounts with new table
+    refetchOnWindowFocus: false, // Don't refetch on focus
+  });
+
+  // Fetch table data
+  const {
+    data: tableDataResponse,
+    isLoading: dataLoading,
+    isError: dataError,
+    error: dataErrorDetails,
+    refetch: refetchData,
+  } = useQuery({
+    queryKey: [
+      'table-data',
+      activeConnection?.id,
+      parsedTable?.schema,
+      parsedTable?.tableName,
+      currentPage,
+      parseInt(pageSize),
+      debouncedSearchQuery,
+      sortColumn,
+      sortDirection,
+      (() => {
+      // Normalize visibleColumns - use sorted array for consistent key
+      // Use cached table if current table is not available
+      const cachedTable = queryClient.getQueryData<TableType>([
+        'table-details',
+        activeConnection?.id,
+        parsedTable?.schema,
+        parsedTable?.tableName,
+      ]);
+      const tableToUse = table || cachedTable;
+      const normalized = visibleColumns.length > 0 ? [...visibleColumns].sort() : (tableToUse?.columns.map(c => c.name).sort() || []);
+        return normalized;
+      })(),
+      filters,
+    ],
+    queryFn: () => {
+      // Get table from cache if current state doesn't have it
+      const cachedTable = queryClient.getQueryData<TableType>([
+        'table-details',
+        activeConnection?.id,
+        parsedTable?.schema,
+        parsedTable?.tableName,
+      ]);
+      const tableToUse = table || cachedTable;
+      
+      // Filter visibleColumns to only include columns that exist in the current table
+      // Use all table columns as fallback if visibleColumns is empty
+      const validColumns = tableToUse && visibleColumns.length > 0
+        ? visibleColumns.filter(col => tableToUse.columns.some(tc => tc.name === col))
+        : (tableToUse ? tableToUse.columns.map(c => c.name) : undefined);
+      
+      return dataService.getTableData(
+        activeConnection!.id,
+        parsedTable!.schema,
+        parsedTable!.tableName,
+        {
+          page: currentPage,
+          pageSize: parseInt(pageSize),
+          search: debouncedSearchQuery || undefined,
+          sortColumn: sortColumn || undefined,
+          sortDirection: sortDirection || undefined,
+          columns: validColumns && validColumns.length > 0 ? validColumns : undefined,
+          filters: filters.length > 0 ? filters : undefined,
+        },
+      );
+    },
+    enabled: (() => {
+      // Check for table in current state OR in cache
+      const cachedTable = queryClient.getQueryData<TableType>([
+        'table-details',
+        activeConnection?.id,
+        parsedTable?.schema,
+        parsedTable?.tableName,
+      ]);
+      const tableToUse = table || cachedTable;
+      const enabled = !!activeConnection && !!parsedTable && !!tableToUse && tableToUse.columns.length > 0;
+      return enabled;
+    })(),
+    staleTime: 300000, // Consider fresh for 5 minutes - prevents refetch on tab switch
+    gcTime: 300000, // Keep in cache for 5 minutes
+    refetchOnMount: 'always', // Always refetch when component mounts with new table
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+    refetchOnReconnect: false, // Don't refetch on reconnect
+    // Don't use keepPreviousData - it causes old table data to show when navigating
+  });
+
+  // Manually read from cache if tableDataResponse is undefined (during loading/unmount)
+  const cachedTableData = useMemo(() => {
+    if (tableDataResponse) return tableDataResponse;
+    
+    // Try to get from cache when response is undefined
+    const cacheKey = [
+      'table-data',
+      activeConnection?.id,
+      parsedTable?.schema,
+      parsedTable?.tableName,
+      currentPage,
+      parseInt(pageSize),
+      debouncedSearchQuery,
+      sortColumn,
+      sortDirection,
+      (() => {
+        const cachedTable = queryClient.getQueryData<TableType>([
+          'table-details',
+          activeConnection?.id,
+          parsedTable?.schema,
+          parsedTable?.tableName,
+        ]);
+        const tableToUse = table || cachedTable;
+        return visibleColumns.length > 0 ? [...visibleColumns].sort() : (tableToUse?.columns.map(c => c.name).sort() || []);
+      })(),
+      filters,
+    ];
+    
+    const cached = queryClient.getQueryData<typeof tableDataResponse>(cacheKey);
+    return cached || null;
+  }, [tableDataResponse, activeConnection?.id, parsedTable?.schema, parsedTable?.tableName, currentPage, pageSize, debouncedSearchQuery, sortColumn, sortDirection, visibleColumns, filters, queryClient, table, activeTab, dataLoading]);
+  
+  // Persist last successful data in state to survive tab switches/unmounts
+  const [persistedTableData, setPersistedTableData] = useState<typeof tableDataResponse>(null);
+  const [persistedPagination, setPersistedPagination] = useState<typeof pagination>(undefined);
+  
+  // Update persisted data when we get successful responses
+  useEffect(() => {
+    if (tableDataResponse && !dataLoading && !dataError) {
+      setPersistedTableData(tableDataResponse);
+      setPersistedPagination(tableDataResponse.pagination);
+    }
+  }, [tableDataResponse, dataLoading, dataError]);
+  
+  // Use persisted data if current response is unavailable
+  const effectiveResponse = tableDataResponse || cachedTableData || persistedTableData;
+  const tableData = effectiveResponse?.data || [];
+  const pagination = effectiveResponse?.pagination || persistedPagination;
+  const isLoading = tableLoading || dataLoading;
+  const isError = tableError || dataError;
+
+
+  // Reset to first page when filters/search change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearchQuery, filters, sortColumn, sortDirection]);
+
+  // Initialize visible columns and widths when table changes
+  // Must be called before any early returns to maintain hook order
+  // Track the current table ID to detect table changes
+  const currentTableIdRef = useRef<string | null>(null);
+  
+  useEffect(() => {
+    if (table && table.columns.length > 0) {
+      const tableId = table.id || `${table.schema}.${table.name}`;
+      
+      // Always reset visibleColumns when table changes
+      if (currentTableIdRef.current !== tableId) {
+        currentTableIdRef.current = tableId;
+        const columnNames = table.columns.map(c => c.name);
+        setVisibleColumns(columnNames);
+        
+        const initialWidths: Record<string, number> = {};
+        table.columns.forEach(col => {
+          initialWidths[col.name] = 150; // Default width
+        });
+        setColumnWidths(initialWidths);
+      } else if (visibleColumns.length === 0) {
+        // Initialize if empty
+        const columnNames = table.columns.map(c => c.name);
+        setVisibleColumns(columnNames);
+        
+        const initialWidths: Record<string, number> = {};
+        table.columns.forEach(col => {
+          initialWidths[col.name] = 150;
+        });
+        setColumnWidths(initialWidths);
+      } else {
+        // Validate visibleColumns against current table columns
+        // Filter out any columns that don't exist in the current table
+        const validColumns = visibleColumns.filter(colName => 
+          table.columns.some(col => col.name === colName)
+        );
+        if (validColumns.length !== visibleColumns.length || validColumns.length === 0) {
+          // Some columns are invalid or empty, reset to all table columns
+          const columnNames = table.columns.map(c => c.name);
+          setVisibleColumns(columnNames);
+        }
+      }
+    }
+  }, [table?.id, table?.schema, table?.name, visibleColumns.length]);
 
   // Initialize breadcrumb trail with persistence
   useEffect(() => {
@@ -113,48 +459,41 @@ const TableViewer = () => {
       setBreadcrumbTrail(newTrail);
       sessionStorage.setItem('tableNavigationTrail', JSON.stringify(newTrail));
     }
+    
+    // Reset state for new table navigation
+    setSearchQuery("");
+    setCurrentPage(1);
+    setSortColumn(null);
+    setSortDirection("asc");
+    setFilters([]);
+    setActiveTab("data");
+    setPersistedTableData(null);
+    setPersistedPagination(undefined);
+    setVisibleColumns([]);
+    
+    // Parse the target table ID to invalidate the correct queries
+    const parts = targetTableId.split('.');
+    if (parts.length >= 2) {
+      const targetSchema = parts[0];
+      const targetTableName = parts.slice(1).join('.');
+      
+      // Remove queries from cache and invalidate to force fresh fetch
+      queryClient.removeQueries({
+        queryKey: ['table-details', activeConnection?.id, targetSchema, targetTableName],
+      });
+      queryClient.removeQueries({
+        queryKey: ['table-data', activeConnection?.id, targetSchema, targetTableName],
+      });
+    }
+    
+    // Navigate to the new table
     navigate(`/table/${targetTableId}`);
-  }, [breadcrumbTrail, navigate]);
+  }, [breadcrumbTrail, navigate, activeConnection?.id, queryClient]);
 
-  const tableData = useMemo(
-    () => mockTableData[tableId as keyof typeof mockTableData] || [],
-    [tableId]
-  );
-
-  // Memoized filter data based on debounced search
-  const filteredData = useMemo(() => {
-    if (!debouncedSearchQuery) return tableData;
-    
-    const query = debouncedSearchQuery.toLowerCase();
-    return tableData.filter((row: any) =>
-      Object.values(row).some(val =>
-        String(val).toLowerCase().includes(query)
-      )
-    );
-  }, [tableData, debouncedSearchQuery]);
-
-  // Memoized sort data
-  const sortedData = useMemo(() => {
-    if (!sortColumn) return filteredData;
-    
-    return [...filteredData].sort((a: any, b: any) => {
-      const aVal = a[sortColumn];
-      const bVal = b[sortColumn];
-      const compare = aVal < bVal ? -1 : aVal > bVal ? 1 : 0;
-      return sortDirection === "asc" ? compare : -compare;
-    });
-  }, [filteredData, sortColumn, sortDirection]);
-
-  // Memoized paginate data
-  const { paginatedData, totalPages, pageSizeNum } = useMemo(() => {
-    const size = parseInt(pageSize);
-    const pages = Math.ceil(sortedData.length / size);
-    const data = sortedData.slice(
-      (currentPage - 1) * size,
-      currentPage * size
-    );
-    return { paginatedData: data, totalPages: pages, pageSizeNum: size };
-  }, [sortedData, pageSize, currentPage]);
+  // Data is already filtered, sorted, and paginated by the API
+  const paginatedData = tableData;
+  const totalPages = pagination?.totalPages || 0;
+  const pageSizeNum = parseInt(pageSize);
 
   // Track render performance
   useEffect(() => {
@@ -187,12 +526,14 @@ const TableViewer = () => {
   }, []);
 
   const handleRefresh = useCallback(() => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      toast.success("Data refreshed");
-    }, 500);
-  }, []);
+    queryClient.invalidateQueries({
+      queryKey: ['table-data', activeConnection?.id, parsedTable?.schema, parsedTable?.tableName],
+    });
+    queryClient.invalidateQueries({
+      queryKey: ['table-details', activeConnection?.id, parsedTable?.schema, parsedTable?.tableName],
+    });
+    toast.success("Data refreshed");
+  }, [queryClient, activeConnection?.id, parsedTable?.schema, parsedTable?.tableName]);
 
   const handleToggleColumn = (columnName: string) => {
     setVisibleColumns(prev =>
@@ -203,12 +544,14 @@ const TableViewer = () => {
   };
 
   const handleToggleAllColumns = (visible: boolean) => {
-    setVisibleColumns(visible ? table.columns.map(c => c.name) : []);
+    if (table) {
+      setVisibleColumns(visible ? table.columns.map(c => c.name) : []);
+    }
   };
 
   const filteredColumns = useMemo(
-    () => table.columns.filter(col => visibleColumns.includes(col.name)),
-    [table.columns, visibleColumns]
+    () => table?.columns.filter(col => visibleColumns.includes(col.name)) || [],
+    [table?.columns, visibleColumns]
   );
 
   const handleCopyRow = useCallback(async (row: any) => {
@@ -222,27 +565,505 @@ const TableViewer = () => {
     }
   }, [filteredColumns]);
 
-  // Keyboard shortcuts
+  // Row selection functions
+  const getRowId = useCallback((row: any, index: number): string => {
+    // Try to use primary key columns if available
+    if (table?.columns) {
+      const primaryKeyColumns = table.columns.filter(col => col.isPrimaryKey);
+      if (primaryKeyColumns.length > 0) {
+        const keyValues = primaryKeyColumns.map(col => String(row[col.name] ?? ''));
+        if (keyValues.every(v => v !== '')) {
+          return keyValues.join('|');
+        }
+      }
+    }
+    // Fallback to row index
+    return `row-${index}`;
+  }, [table]);
+
+  const handleToggleRowSelection = useCallback((rowId: string) => {
+    setSelectedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(rowId)) {
+        newSet.delete(rowId);
+      } else {
+        newSet.add(rowId);
+      }
+      return newSet;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    if (!paginatedData || paginatedData.length === 0) return;
+    
+    const allRowIds = paginatedData.map((row, idx) => getRowId(row, idx));
+    const allSelected = allRowIds.every(id => selectedRows.has(id));
+    
+    if (allSelected) {
+      // Deselect all
+      setSelectedRows(prev => {
+        const newSet = new Set(prev);
+        allRowIds.forEach(id => newSet.delete(id));
+        return newSet;
+      });
+    } else {
+      // Select all visible rows
+      setSelectedRows(prev => {
+        const newSet = new Set(prev);
+        allRowIds.forEach(id => newSet.add(id));
+        return newSet;
+      });
+    }
+  }, [paginatedData, selectedRows, getRowId]);
+
+  const handleDeleteClick = useCallback(() => {
+    if (selectedRows.size === 0) {
+      toast.info("No rows selected");
+      return;
+    }
+
+    if (!activeConnection || !parsedTable) {
+      toast.error("No connection or table selected");
+      return;
+    }
+
+    // Open confirmation dialog
+    setDeleteDialogOpen(true);
+  }, [selectedRows, activeConnection, parsedTable]);
+
+  const handleConfirmDelete = useCallback(async () => {
+    if (!activeConnection || !parsedTable || selectedRows.size === 0) {
+      return;
+    }
+
+    setIsDeleting(true);
+
+    try {
+      const rowIdsArray = Array.from(selectedRows);
+      
+      // Use batch delete API
+      const response = await dataService.deleteRows(
+        activeConnection.id,
+        parsedTable.schema,
+        parsedTable.tableName,
+        rowIdsArray
+      );
+
+      if (response.success) {
+        toast.success(`Successfully deleted ${response.deletedCount} row(s)`);
+        
+        // Clear selection
+        setSelectedRows(new Set());
+        
+        // Close dialog
+        setDeleteDialogOpen(false);
+        
+        // Invalidate and refetch table data
+        queryClient.invalidateQueries({
+          queryKey: ['table-data', activeConnection.id, parsedTable.schema, parsedTable.tableName],
+        });
+        
+        // Also invalidate count
+        queryClient.invalidateQueries({
+          queryKey: ['table-count', activeConnection.id, parsedTable.schema, parsedTable.tableName],
+        });
+      } else {
+        toast.error(response.message || 'Failed to delete rows');
+      }
+    } catch (error: any) {
+      console.error('Delete error:', error);
+      toast.error(error.message || 'Failed to delete rows');
+    } finally {
+      setIsDeleting(false);
+    }
+  }, [selectedRows, activeConnection, parsedTable, queryClient]);
+
+  // Handle bulk update
+  const handleBulkUpdate = useCallback(async (updates: Array<{ column: string; value: string }>) => {
+    if (!activeConnection || !parsedTable || selectedRows.size === 0) {
+      return;
+    }
+
+    setIsUpdating(true);
+
+    try {
+      const rowIdsArray = Array.from(selectedRows);
+      
+      const response = await dataService.updateRows(
+        activeConnection.id,
+        parsedTable.schema,
+        parsedTable.tableName,
+        {
+          rowIds: rowIdsArray,
+          updates: updates,
+        }
+      );
+
+      if (response.success) {
+        toast.success(`Successfully updated ${response.updatedCount} row(s)`);
+        
+        if (response.errors && response.errors.length > 0) {
+          toast.warning(`${response.errors.length} row(s) failed to update`);
+        }
+        
+        // Clear selection
+        setSelectedRows(new Set());
+        
+        // Close dialog
+        setUpdateDialogOpen(false);
+        
+        // Invalidate and refetch table data
+        queryClient.invalidateQueries({
+          queryKey: ['table-data', activeConnection.id, parsedTable.schema, parsedTable.tableName],
+        });
+        
+        // Also invalidate count
+        queryClient.invalidateQueries({
+          queryKey: ['table-count', activeConnection.id, parsedTable.schema, parsedTable.tableName],
+        });
+      } else {
+        toast.error(response.message || 'Failed to update rows');
+      }
+    } catch (error: any) {
+      console.error('Update error:', error);
+      toast.error(error.message || 'Failed to update rows');
+    } finally {
+      setIsUpdating(false);
+    }
+  }, [selectedRows, activeConnection, parsedTable, queryClient]);
+
+  // Handle bulk export
+  const handleBulkExport = useCallback(() => {
+    if (selectedRows.size === 0) {
+      toast.error("No rows selected for export");
+      return;
+    }
+    setExportDialogOpen(true);
+  }, [selectedRows]);
+
+  // Get selected rows data
+  const selectedRowsData = useMemo(() => {
+    if (!paginatedData || selectedRows.size === 0) return [];
+    
+    return paginatedData.filter((row, idx) => {
+      const rowId = getRowId(row, idx);
+      return selectedRows.has(rowId);
+    });
+  }, [paginatedData, selectedRows, getRowId]);
+
+  // Handle start editing a cell
+  const handleStartEditCell = useCallback((rowId: string, columnName: string) => {
+    if (!editMode) return;
+    setEditingCell({ rowId, columnName });
+  }, [editMode]);
+
+  // Handle cancel editing
+  const handleCancelEditCell = useCallback(() => {
+    setEditingCell(null);
+  }, []);
+
+  // Handle save cell edit
+  const handleSaveCellEdit = useCallback(async (rowId: string, columnName: string, newValue: any) => {
+    if (!activeConnection || !parsedTable || !table) {
+      toast.error("Missing connection or table information");
+      return;
+    }
+
+    setIsSavingCell(true);
+
+    try {
+      // Find the row data to get the primary key
+      const rowIndex = paginatedData?.findIndex((row, idx) => {
+        const id = getRowId(row, idx);
+        return id === rowId;
+      });
+
+      if (rowIndex === undefined || rowIndex === -1) {
+        toast.error("Row not found");
+        return;
+      }
+
+      const row = paginatedData![rowIndex];
+      
+      // Get primary key columns
+      const primaryKeyColumns = table.columns.filter(col => col.isPrimaryKey);
+      if (primaryKeyColumns.length === 0) {
+        toast.error("Table has no primary key");
+        return;
+      }
+
+      // Build row ID from primary key values
+      const primaryKeyValues = primaryKeyColumns.map(col => row[col.name]);
+      const rowIdValue = primaryKeyColumns.length === 1 
+        ? String(primaryKeyValues[0])
+        : primaryKeyValues.join('|');
+
+      // Prepare update data
+      const updateData: Record<string, any> = {
+        [columnName]: newValue,
+      };
+
+      // Call update API
+      const response = await dataService.updateRow(
+        activeConnection.id,
+        parsedTable.schema,
+        parsedTable.tableName,
+        rowIdValue,
+        updateData,
+      );
+
+      if (response.success && response.row) {
+        toast.success(`Updated ${columnName}`);
+        
+        // Close editing
+        setEditingCell(null);
+        
+        // Invalidate and refetch table data
+        queryClient.invalidateQueries({
+          queryKey: ['table-data', activeConnection.id, parsedTable.schema, parsedTable.tableName],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ['table-count', activeConnection.id, parsedTable.schema, parsedTable.tableName],
+        });
+      } else {
+        toast.error(response.message || 'Failed to update cell');
+      }
+    } catch (error: any) {
+      console.error('Cell update error:', error);
+      toast.error(error.message || 'Failed to update cell');
+    } finally {
+      setIsSavingCell(false);
+    }
+  }, [activeConnection, parsedTable, table, paginatedData, getRowId, queryClient]);
+
+  // Handle add new row
+  const handleAddRow = useCallback(async (data: Record<string, any>) => {
+    if (!activeConnection || !parsedTable) {
+      toast.error("Missing connection or table information");
+      return;
+    }
+
+    setIsInserting(true);
+
+    try {
+      const response = await dataService.insertRow(
+        activeConnection.id,
+        parsedTable.schema,
+        parsedTable.tableName,
+        data,
+      );
+
+      if (response.success) {
+        toast.success("Row inserted successfully");
+        
+        // Close dialog
+        setAddRowDialogOpen(false);
+        
+        // Invalidate and refetch table data
+        queryClient.invalidateQueries({
+          queryKey: ['table-data', activeConnection.id, parsedTable.schema, parsedTable.tableName],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ['table-count', activeConnection.id, parsedTable.schema, parsedTable.tableName],
+        });
+      } else {
+        toast.error(response.message || 'Failed to insert row');
+      }
+    } catch (error: any) {
+      console.error('Insert error:', error);
+      toast.error(error.message || 'Failed to insert row');
+    } finally {
+      setIsInserting(false);
+    }
+  }, [activeConnection, parsedTable, queryClient]);
+
+  // Clear selection when table changes
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd/Ctrl + R to refresh
-      if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
-        e.preventDefault();
+    setSelectedRows(new Set());
+  }, [table?.id]);
+
+  // Compute select all state
+  const isAllSelected = useMemo(() => {
+    if (!paginatedData || paginatedData.length === 0) return false;
+    const allRowIds = paginatedData.map((row, idx) => getRowId(row, idx));
+    return allRowIds.length > 0 && allRowIds.every(id => selectedRows.has(id));
+  }, [paginatedData, selectedRows, getRowId]);
+
+  const isSomeSelected = useMemo(() => {
+    if (!paginatedData || paginatedData.length === 0) return false;
+    const allRowIds = paginatedData.map((row, idx) => getRowId(row, idx));
+    return allRowIds.some(id => selectedRows.has(id));
+  }, [paginatedData, selectedRows, getRowId]);
+
+  // Keyboard shortcuts for Table Viewer
+  useKeyboardShortcut(
+    'f',
+    () => {
+      searchInputRef.current?.focus();
+      searchInputRef.current?.select();
+    },
+    { ctrl: true },
+    { enabled: activeTab === 'data' }
+  );
+
+  useKeyboardShortcut(
+    'r',
+    () => {
+      if (!isLoading && table) {
         handleRefresh();
       }
-    };
+    },
+    { ctrl: true },
+    { enabled: !!table }
+  );
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [handleRefresh]);
+  // Select all rows with Ctrl+A
+  useKeyboardShortcut(
+    'a',
+    () => {
+      if (activeTab === 'data' && paginatedData && paginatedData.length > 0) {
+        handleSelectAll();
+      }
+    },
+    { ctrl: true },
+    { enabled: activeTab === 'data' && !!paginatedData && paginatedData.length > 0 }
+  );
+
+  // Delete selected rows with Delete key
+  useKeyboardShortcut(
+    'Delete',
+    () => {
+      if (activeTab === 'data' && selectedRows.size > 0) {
+        handleDeleteClick();
+      }
+    },
+    {},
+    { enabled: activeTab === 'data' && selectedRows.size > 0 }
+  );
+
+  // Cancel selection with Esc key
+  useKeyboardShortcut(
+    'Escape',
+    () => {
+      if (activeTab === 'data' && selectedRows.size > 0) {
+        setSelectedRows(new Set());
+      }
+    },
+    {},
+    { enabled: activeTab === 'data' && selectedRows.size > 0 }
+  );
+
+  // Toggle edit mode with Ctrl+E
+  useKeyboardShortcut(
+    'e',
+    () => {
+      if (activeTab === 'data' && table) {
+        setEditMode(prev => !prev);
+        if (editMode) {
+          setEditingCell(null); // Clear any active editing when exiting edit mode
+        }
+      }
+    },
+    { ctrl: true },
+    { enabled: activeTab === 'data' && !!table }
+  );
+
+  // Handle chart generation
+  const handleGenerateChart = useCallback(async (options: ChartOptions) => {
+    if (!activeConnection || !parsedTable || !table) {
+      toast.error("Cannot generate chart", {
+        description: "Table information not available",
+      });
+      return;
+    }
+
+    setIsGeneratingChart(true);
+    setChartOptions(options);
+
+    try {
+      const chartResponse = await chartsService.getTableChartData(
+        activeConnection.id,
+        parsedTable.schema,
+        parsedTable.tableName,
+        options,
+      );
+      setChartData(chartResponse);
+      setActiveTab("charts");
+      toast.success("Chart generated successfully");
+    } catch (error: any) {
+      toast.error("Failed to generate chart", {
+        description: error.message || "Unknown error occurred",
+      });
+    } finally {
+      setIsGeneratingChart(false);
+    }
+  }, [activeConnection, parsedTable, table]);
 
   // Virtual scrolling setup
   const rowVirtualizer = useVirtualizer({
-    count: paginatedData.length,
+    count: paginatedData?.length || 0,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 45,
     overscan: 10,
   });
+
+  // Early returns after ALL hooks are called
+  if (!parsedTable) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12 text-muted-foreground">
+          <AlertCircle className="w-12 h-12 mx-auto mb-3 opacity-20" />
+          <p className="text-lg font-medium mb-2">Invalid Table ID</p>
+          <p className="text-sm">The table ID format is invalid. Expected format: schema.tableName</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!activeConnection) {
+    return (
+      <div className="p-6">
+        <div className="text-center py-12 text-muted-foreground">
+          <AlertCircle className="w-12 h-12 mx-auto mb-3 opacity-20" />
+          <p className="text-lg font-medium mb-2">No Connection Selected</p>
+          <p className="text-sm">Please select a database connection to view table data.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (tableLoading) {
+    return (
+      <div className="p-6">
+        <TableSkeleton rows={5} columns={4} />
+      </div>
+    );
+  }
+
+  if (tableError || !table) {
+    return (
+      <div className="p-6 space-y-4">
+        <ErrorDisplay
+          error={tableErrorDetails || new Error('Table not found or connection error')}
+          title="Failed to load table"
+          onRetry={() => {
+            queryClient.invalidateQueries({
+              queryKey: ['table-details', activeConnection?.id, parsedTable?.schema, parsedTable?.tableName],
+            });
+          }}
+        />
+        {activeConnection && (
+          <ConnectionErrorHandler
+            error={tableErrorDetails}
+            connectionId={activeConnection.id}
+          />
+        )}
+        <Button variant="outline" onClick={() => navigate('/')}>
+          Back to Schema Browser
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="h-full flex flex-col">
@@ -256,38 +1077,103 @@ const TableViewer = () => {
                 {table.schema}.{table.name}
               </h1>
               <p className="text-sm text-muted-foreground mt-1">
-                {table.rowCount.toLocaleString()} rows • {table.size} • {table.columns.length} columns
+                {pagination?.filteredRows !== undefined && pagination.filteredRows !== pagination.totalRows
+                  ? `${pagination.filteredRows.toLocaleString()} of ${pagination.totalRows.toLocaleString()} rows`
+                  : `${pagination?.totalRows?.toLocaleString() || table.rowCount.toLocaleString()} rows`}
+                {' • '}
+                {table.size} • {table.columns.length} columns
                 {renderTime > 0 && <span className="text-primary ml-2">• Rendered in {renderTime}ms</span>}
               </p>
             </div>
           </div>
           <div className="flex gap-2">
-            <DataFilters columns={table.columns} onApplyFilters={() => {}} />
+            <DataFilters
+              columns={table.columns}
+              initialFilters={filters}
+              onApplyFilters={(newFilters: FilterRule[]) => {
+                setFilters(newFilters);
+              }}
+            />
             <ColumnManager
               columns={table.columns}
               visibleColumns={visibleColumns}
               onToggleColumn={handleToggleColumn}
               onToggleAll={handleToggleAllColumns}
             />
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="gap-2"
-              onClick={handleRefresh}
-              disabled={isLoading}
-            >
-              <RefreshCcw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-              Refresh
-            </Button>
-            <ExportDialog tableName={table.name} />
+            <ShortcutTooltip shortcut="Ctrl+R" description="Refresh table data">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2"
+                onClick={handleRefresh}
+                disabled={isLoading || !table}
+              >
+                <RefreshCcw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </ShortcutTooltip>
+            {table && activeConnection && parsedTable && (
+              <>
+                {editMode && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setEditMode(false);
+                      setEditingCell(null);
+                    }}
+                    className="gap-2"
+                  >
+                    <X className="w-4 h-4" />
+                    Exit Edit Mode
+                  </Button>
+                )}
+                {!editMode && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditMode(true)}
+                    className="gap-2"
+                  >
+                    <Edit className="w-4 h-4" />
+                    Edit Mode
+                  </Button>
+                )}
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => setAddRowDialogOpen(true)}
+                  className="gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  Add Row
+                </Button>
+                <ExportDialog
+                  connectionId={activeConnection.id}
+                  schema={parsedTable.schema}
+                  table={parsedTable.tableName}
+                  tableName={table.name}
+                  filters={filters.length > 0 ? filters : undefined}
+                  sort={sortColumn ? { column: sortColumn, direction: sortDirection } : undefined}
+                  search={searchQuery || undefined}
+                  selectedColumns={visibleColumns.length > 0 && visibleColumns.length < table.columns.length ? visibleColumns : undefined}
+                />
+              </>
+            )}
           </div>
         </div>
       </div>
 
-      <Tabs defaultValue="data" className="flex-1 flex flex-col">
+      <Tabs value={activeTab} onValueChange={(value) => {
+        setActiveTab(value);
+      }} className="flex-1 flex flex-col">
         <div className="border-b border-border px-6">
           <TabsList>
             <TabsTrigger value="data">Data</TabsTrigger>
+            <TabsTrigger value="charts" className="gap-2">
+              <BarChart3 className="w-3.5 h-3.5" />
+              Charts
+            </TabsTrigger>
             <TabsTrigger value="structure">Structure</TabsTrigger>
             <TabsTrigger value="indexes">Indexes</TabsTrigger>
             <TabsTrigger value="relationships">Relationships</TabsTrigger>
@@ -295,12 +1181,13 @@ const TableViewer = () => {
         </div>
 
         <div className="flex-1 overflow-auto">
-          <TabsContent value="data" className="mt-0 h-full">
+          <TabsContent value="data" className="mt-0 h-full" forceMount>
             <div className="p-6 space-y-4">
-              <div className="flex gap-4 items-center">
+              <div className="flex gap-4 items-center flex-wrap">
                 <div className="relative flex-1 max-w-md">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
+                    ref={searchInputRef}
                     placeholder="Search in table..."
                     value={searchQuery}
                     onChange={(e) => {
@@ -310,9 +1197,43 @@ const TableViewer = () => {
                     className="pl-10"
                   />
                 </div>
+                {selectedRows.size > 0 && (
+                  <BulkActionsToolbar
+                    selectedCount={selectedRows.size}
+                    onUpdate={() => setUpdateDialogOpen(true)}
+                    onDelete={handleDeleteClick}
+                    onExport={handleBulkExport}
+                    onClearSelection={() => setSelectedRows(new Set())}
+                    isUpdating={isUpdating}
+                    isDeleting={isDeleting}
+                  />
+                )}
+                {editMode && (
+                  <div className="flex items-center gap-2 px-3 py-1.5 bg-primary/10 border border-primary/20 rounded-md">
+                    <Edit className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-medium text-primary">Edit Mode Active</span>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setEditMode(false);
+                        setEditingCell(null);
+                      }}
+                      className="h-6 px-2"
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-muted-foreground">Rows per page:</span>
-                  <Select value={pageSize} onValueChange={setPageSize}>
+                  <Select
+                    value={pageSize}
+                    onValueChange={(value) => {
+                      setPageSize(value);
+                      setCurrentPage(1); // Reset to first page when changing page size
+                    }}
+                  >
                     <SelectTrigger className="w-24">
                       <SelectValue />
                     </SelectTrigger>
@@ -340,33 +1261,49 @@ const TableViewer = () => {
                         {/* Header */}
                         <div className="sticky top-0 z-10 bg-table-header border-b">
                           <div className="flex">
+                            <div className="w-12 px-3 py-3 text-center border-r bg-table-header flex items-center justify-center">
+                              <Checkbox
+                                checked={isAllSelected}
+                                onCheckedChange={handleSelectAll}
+                                className="cursor-pointer"
+                                aria-label="Select all rows"
+                              />
+                            </div>
                             <div className="w-16 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider border-r bg-table-header">
                               #
                             </div>
                             {filteredColumns.map((column) => (
                               <div
                                 key={column.name}
-                                className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider border-r"
-                                style={{ minWidth: columnWidths[column.name] || 150, width: columnWidths[column.name] || 150 }}
+                                className="text-left text-xs font-semibold uppercase tracking-wider border-r overflow-hidden"
+                                style={{ minWidth: columnWidths[column.name] || 150, width: columnWidths[column.name] || 150, maxWidth: columnWidths[column.name] || 150 }}
                               >
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-8 gap-2 -ml-3 font-semibold flex items-center"
-                                  onClick={() => handleSort(column.name)}
-                                >
-                                  <span className="truncate">{column.name}</span>
-                                  {column.isPrimaryKey && <Key className="w-3 h-3 text-primary flex-shrink-0" />}
-                                  {sortColumn === column.name ? (
-                                    sortDirection === "asc" ? (
-                                      <ArrowUp className="w-3 h-3 flex-shrink-0" />
-                                    ) : (
-                                      <ArrowDown className="w-3 h-3 flex-shrink-0" />
-                                    )
-                                  ) : (
-                                    <ArrowUpDown className="w-3 h-3 opacity-30 flex-shrink-0" />
-                                  )}
-                                </Button>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-8 gap-2 font-semibold flex items-center w-full max-w-full min-w-0 px-4 py-3"
+                                      onClick={() => handleSort(column.name)}
+                                    >
+                                      <span className="truncate min-w-0 flex-1 text-left max-w-full">{column.name}</span>
+                                      {column.isPrimaryKey && <Key className="w-3 h-3 text-primary flex-shrink-0" />}
+                                      {sortColumn === column.name ? (
+                                        sortDirection === "asc" ? (
+                                          <ArrowUp className="w-3 h-3 flex-shrink-0" />
+                                        ) : (
+                                          <ArrowDown className="w-3 h-3 flex-shrink-0" />
+                                        )
+                                      ) : (
+                                        <ArrowUpDown className="w-3 h-3 opacity-30 flex-shrink-0" />
+                                      )}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>{column.name}</p>
+                                    {column.type && <p className="text-xs text-muted-foreground mt-1">{column.type}</p>}
+                                  </TooltipContent>
+                                </Tooltip>
                               </div>
                             ))}
                           </div>
@@ -380,53 +1317,140 @@ const TableViewer = () => {
                             position: 'relative',
                           }}
                         >
-                          {paginatedData.length === 0 ? (
+                          {isLoading && paginatedData.length === 0 ? (
                             <div className="text-center py-8 text-muted-foreground">
-                              {isLoading ? 'Loading...' : 'No data found'}
+                              <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin opacity-50" />
+                              <p>Loading data...</p>
+                            </div>
+                          ) : dataError ? (
+                            <div className="text-center py-8 text-muted-foreground">
+                              <AlertCircle className="w-6 h-6 mx-auto mb-2 opacity-20 text-destructive" />
+                              <p className="text-destructive">Failed to load table data</p>
+                              <p className="text-sm mt-1">
+                                {dataErrorDetails instanceof Error ? dataErrorDetails.message : 'An error occurred'}
+                              </p>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="mt-3"
+                                onClick={() => refetchData()}
+                              >
+                                Retry
+                              </Button>
+                            </div>
+                          ) : paginatedData.length === 0 ? (
+                            <div className="text-center py-8 text-muted-foreground">
+                              <p>No data found</p>
+                              {(filters.length > 0 || debouncedSearchQuery) && (
+                                <p className="text-sm mt-2">
+                                  Try adjusting your filters or search query
+                                </p>
+                              )}
                             </div>
                           ) : (
                             rowVirtualizer.getVirtualItems().map((virtualRow) => {
-                              const row = paginatedData[virtualRow.index];
+                              const row = paginatedData?.[virtualRow.index];
+                              if (!row) return null;
+                              const rowId = getRowId(row, virtualRow.index);
+                              const isSelected = selectedRows.has(rowId);
                               return (
                                 <div
                                   key={virtualRow.index}
-                                  className="absolute top-0 left-0 w-full flex border-b hover:bg-table-row-hover group"
+                                  className={cn(
+                                    "absolute top-0 left-0 w-full flex border-b group hover:z-10 transition-all",
+                                    isSelected && "bg-primary/5"
+                                  )}
                                   style={{
                                     height: `${virtualRow.size}px`,
                                     transform: `translateY(${virtualRow.start}px)`,
                                   }}
                                 >
-                                  <div className="w-16 px-4 py-3 font-mono text-xs text-muted-foreground border-r bg-background group-hover:bg-table-row-hover flex items-center">
+                                  <div className="w-12 px-3 py-3 border-r bg-background group-hover:bg-muted flex items-center justify-center transition-colors">
+                                    <Checkbox
+                                      checked={isSelected}
+                                      onCheckedChange={() => handleToggleRowSelection(rowId)}
+                                      className="cursor-pointer"
+                                      aria-label={`Select row ${virtualRow.index + 1}`}
+                                    />
+                                  </div>
+                                  <div className="w-16 px-4 py-3 font-mono text-xs text-muted-foreground border-r bg-background group-hover:bg-muted flex items-center transition-colors">
                                     {(currentPage - 1) * pageSizeNum + virtualRow.index + 1}
                                   </div>
                                    {filteredColumns.map((column) => {
                                      const cellId = `${virtualRow.index}-${column.name}`;
                                      const value = row[column.name];
                                      const isForeignKey = column.isForeignKey;
+                                     const displayValue = value !== null && value !== undefined 
+                                       ? (isForeignKey ? value : String(value))
+                                       : null;
+                                     
+                                     // Check if this cell is being edited
+                                     const isEditingThisCell = editMode && editingCell?.rowId === rowId && editingCell?.columnName === column.name;
+                                     // Can't edit primary keys or foreign keys in edit mode
+                                     const canEdit = editMode && !column.isPrimaryKey && !isForeignKey;
                                      
                                      return (
                                        <div
                                          key={column.name}
-                                         className="px-4 py-3 font-mono text-sm border-r group/cell relative flex items-center"
+                                         className="px-4 py-3 font-mono text-sm border-r group/cell relative flex items-center bg-background group-hover:bg-muted transition-colors"
                                          style={{ minWidth: columnWidths[column.name] || 150, width: columnWidths[column.name] || 150 }}
                                        >
-                                         <div className="flex items-center justify-between gap-2 w-full">
-                                           <span className="truncate flex-1">
-                                             {value !== null && value !== undefined ? (
-                                               isForeignKey ? (
-                                                 <ForeignKeyCell 
-                                                   value={value}
-                                                   columnName={column.name}
-                                                   tableName={table.name}
-                                                 />
-                                               ) : (
-                                                 String(value)
-                                               )
-                                             ) : (
-                                               <span className="text-muted-foreground italic">NULL</span>
-                                             )}
-                                           </span>
-                                           {!isForeignKey && (
+                                         <div className="flex items-center justify-between gap-2 w-full min-w-0">
+                                           {isEditingThisCell ? (
+                                             <EditableCell
+                                               value={value}
+                                               column={column}
+                                               isEditing={true}
+                                               isSaving={isSavingCell}
+                                               onStartEdit={() => handleStartEditCell(rowId, column.name)}
+                                               onCancelEdit={handleCancelEditCell}
+                                               onSave={(newValue) => handleSaveCellEdit(rowId, column.name, newValue)}
+                                               className="flex-1 min-w-0"
+                                             />
+                                           ) : canEdit ? (
+                                             <EditableCell
+                                               value={value}
+                                               column={column}
+                                               isEditing={false}
+                                               onStartEdit={() => handleStartEditCell(rowId, column.name)}
+                                               onCancelEdit={handleCancelEditCell}
+                                               onSave={(newValue) => handleSaveCellEdit(rowId, column.name, newValue)}
+                                               className="flex-1 min-w-0"
+                                             />
+                                           ) : displayValue !== null ? (
+                                             <Tooltip>
+                                               <TooltipTrigger asChild>
+                                                  <span className="truncate flex-1 min-w-0 cursor-default">
+                                                    {isForeignKey && activeConnection && parsedTable ? (
+                                                      <ForeignKeyCell 
+                                                        value={value}
+                                                        columnName={column.name}
+                                                        connectionId={activeConnection.id}
+                                                        schema={parsedTable.schema}
+                                                        table={table}
+                                                      />
+                                                    ) : (
+                                                      displayValue
+                                                    )}
+                                                  </span>
+                                               </TooltipTrigger>
+                                               <TooltipContent side="bottom" className="max-w-md">
+                                                 <div className="font-mono text-sm break-words whitespace-pre-wrap">
+                                                   {String(value)}
+                                                 </div>
+                                                 {column.type && (
+                                                   <div className="text-xs text-muted-foreground mt-1">
+                                                     {column.type}
+                                                   </div>
+                                                 )}
+                                               </TooltipContent>
+                                             </Tooltip>
+                                           ) : (
+                                             <span className="truncate flex-1 min-w-0 text-muted-foreground italic">
+                                               NULL
+                                             </span>
+                                           )}
+                                           {!isForeignKey && !canEdit && !isEditingThisCell && (
                                              <Button
                                                variant="ghost"
                                                size="icon"
@@ -458,7 +1482,23 @@ const TableViewer = () => {
               <div className="flex items-center justify-between text-sm">
                 <div className="text-muted-foreground flex items-center gap-4">
                   <span>
-                    Showing {((currentPage - 1) * pageSizeNum) + 1} to {Math.min(currentPage * pageSizeNum, sortedData.length)} of {sortedData.length} {sortedData.length !== table.rowCount && `(filtered from ${table.rowCount.toLocaleString()})`} rows
+                    {isLoading ? (
+                      <span className="text-muted-foreground">Loading...</span>
+                    ) : pagination ? (
+                      <>
+                        Showing {((currentPage - 1) * pageSizeNum) + 1} to{' '}
+                        {Math.min(currentPage * pageSizeNum, pagination.filteredRows || pagination.totalRows)} of{' '}
+                        {(pagination.filteredRows || pagination.totalRows).toLocaleString()}{' '}
+                        {pagination.filteredRows !== undefined && pagination.filteredRows !== pagination.totalRows && (
+                          <span className="text-muted-foreground">
+                            (filtered from {pagination.totalRows.toLocaleString()})
+                          </span>
+                        )}{' '}
+                        rows
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">No data</span>
+                    )}
                   </span>
                   {isLoading && <span className="text-primary">• Loading...</span>}
                   <span className="text-xs">
@@ -506,10 +1546,42 @@ const TableViewer = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="structure" className="mt-0">
+          <TabsContent value="charts" className="mt-0" forceMount>
             <div className="p-6 space-y-4">
-              {table.columns.map((column) => (
-                <Card key={column.name}>
+              {!table ? (
+                <Card>
+                  <CardContent className="py-12 text-center text-muted-foreground">
+                    <p>Loading table information...</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <>
+                  <ChartBuilder
+                    columns={table.columns}
+                    onGenerateChart={handleGenerateChart}
+                    isLoading={isGeneratingChart}
+                  />
+                  {chartData && chartOptions && (
+                    <div className="space-y-4">
+                      <Card>
+                        <CardHeader>
+                          <CardTitle>Chart Visualization</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <ChartViewer chartData={chartData} height={400} />
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="structure" className="mt-0" forceMount>
+            <div className="p-6 space-y-4">
+              {table.columns.map((column, idx) => (
+                <Card key={`column-${column.name}-${idx}`}>
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-base font-mono">{column.name}</CardTitle>
@@ -540,10 +1612,10 @@ const TableViewer = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="indexes" className="mt-0">
+          <TabsContent value="indexes" className="mt-0" forceMount>
             <div className="p-6 space-y-4">
-              {table.indexes.map((index) => (
-                <Card key={index.name}>
+              {table.indexes.map((index, idx) => (
+                <Card key={`index-${index.name}-${index.columns.join('-')}-${idx}`}>
                   <CardHeader>
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-base">{index.name}</CardTitle>
@@ -561,7 +1633,7 @@ const TableViewer = () => {
             </div>
           </TabsContent>
 
-          <TabsContent value="relationships" className="mt-0">
+          <TabsContent value="relationships" className="mt-0" forceMount>
             <div className="p-6">
               <div className="space-y-6">
                 <div>
@@ -573,18 +1645,15 @@ const TableViewer = () => {
                   </h3>
                   {table.foreignKeys.length > 0 ? (
                     <div className="space-y-3">
-                      {table.foreignKeys.map((fk) => {
-                        const referencedTable = mockTables.find(t => t.name === fk.referencedTable);
-                        return (
-                          <RelationshipCard
-                            key={fk.name}
-                            foreignKey={fk}
-                            currentTable={table.name}
-                            isIncoming={false}
-                            relatedRowCount={referencedTable?.rowCount}
-                          />
-                        );
-                      })}
+                      {table.foreignKeys.map((fk, idx) => (
+                        <RelationshipCard
+                          key={`fk-${fk.name}-${fk.columns.join('-')}-${idx}`}
+                          foreignKey={fk}
+                          currentTable={table.name}
+                          currentSchema={table.schema}
+                          isIncoming={false}
+                        />
+                      ))}
                     </div>
                   ) : (
                     <p className="text-sm text-muted-foreground">No foreign keys defined</p>
@@ -594,49 +1663,62 @@ const TableViewer = () => {
                 <div>
                   <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
                     Referenced By (Incoming)
-                    {mockTables.filter((t) =>
-                      t.foreignKeys.some((fk) => fk.referencedTable === table.name)
-                    ).length > 0 && (
-                      <Badge variant="secondary">
-                        {mockTables.filter((t) =>
-                          t.foreignKeys.some((fk) => fk.referencedTable === table.name)
-                        ).length}
-                      </Badge>
-                    )}
                   </h3>
-                  {mockTables.filter((t) =>
-                    t.foreignKeys.some((fk) => fk.referencedTable === table.name)
-                  ).length > 0 ? (
-                    <div className="space-y-3">
-                      {mockTables
-                        .filter((t) =>
-                          t.foreignKeys.some((fk) => fk.referencedTable === table.name)
-                        )
-                        .map((t) => {
-                          const relevantFks = t.foreignKeys.filter((fk) => fk.referencedTable === table.name);
-                          return relevantFks.map((fk) => (
-                            <RelationshipCard
-                              key={`${t.id}-${fk.name}`}
-                              foreignKey={fk}
-                              currentTable={table.name}
-                              isIncoming={true}
-                              referencingTable={t.name}
-                              relatedRowCount={t.rowCount}
-                            />
-                          ));
-                        })}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      No tables reference this table
-                    </p>
-                  )}
+                  <p className="text-sm text-muted-foreground">
+                    Incoming relationships will be available in a future update. Use the ER Diagram view to see all relationships.
+                  </p>
                 </div>
               </div>
             </div>
           </TabsContent>
         </div>
       </Tabs>
+
+      {/* Delete Confirmation Dialog */}
+      <DeleteConfirmationDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        onConfirm={handleConfirmDelete}
+        rowCount={selectedRows.size}
+        isDeleting={isDeleting}
+      />
+      
+      {/* Bulk Update Dialog */}
+      {table && (
+        <BulkUpdateDialog
+          open={updateDialogOpen}
+          onOpenChange={setUpdateDialogOpen}
+          onConfirm={handleBulkUpdate}
+          rowCount={selectedRows.size}
+          columns={table.columns}
+          selectedRowsData={selectedRowsData}
+          isUpdating={isUpdating}
+        />
+      )}
+      
+      {/* Bulk Export Dialog */}
+      {activeConnection && parsedTable && (
+        <BulkExportDialog
+          open={exportDialogOpen}
+          onOpenChange={setExportDialogOpen}
+          connectionId={activeConnection.id}
+          schema={parsedTable.schema}
+          table={parsedTable.tableName}
+          rowIds={Array.from(selectedRows)}
+          rowCount={selectedRows.size}
+        />
+      )}
+      
+      {/* Add Row Dialog */}
+      {table && (
+        <AddRowDialog
+          open={addRowDialogOpen}
+          onOpenChange={setAddRowDialogOpen}
+          onConfirm={handleAddRow}
+          columns={table.columns}
+          isInserting={isInserting}
+        />
+      )}
     </div>
   );
 };
