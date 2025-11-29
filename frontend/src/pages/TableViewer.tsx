@@ -1353,6 +1353,10 @@ const TableViewer = () => {
                               if (!row) return null;
                               const rowId = getRowId(row, virtualRow.index);
                               const isSelected = selectedRows.has(rowId);
+                              // Check if this is the last visible row to determine tooltip side
+                              // This prevents tooltips from being cut off at the bottom of the table
+                              const virtualItems = rowVirtualizer.getVirtualItems();
+                              const isLastVisibleRow = virtualItems.length > 0 && virtualRow.index === virtualItems[virtualItems.length - 1]?.index;
                               return (
                                 <div
                                   key={virtualRow.index}
@@ -1434,7 +1438,7 @@ const TableViewer = () => {
                                                     )}
                                                   </span>
                                                </TooltipTrigger>
-                                               <TooltipContent side="bottom" className="max-w-md">
+                                               <TooltipContent side={isLastVisibleRow ? "top" : "bottom"} className="max-w-md">
                                                  <div className="font-mono text-sm break-words whitespace-pre-wrap">
                                                    {String(value)}
                                                  </div>
