@@ -9,10 +9,14 @@ import { cn } from "@/lib/utils";
 export type TableNodeData = {
   table: Table;
   isHighlighted?: boolean;
+  expanded?: boolean;
 };
 
-export const FlowTableNode = memo(({ data, selected }: NodeProps<TableNodeData>) => {
-  const { table, isHighlighted } = data;
+const FlowTableNodeComponent = ({ data, selected }: NodeProps<TableNodeData>) => {
+  const { table, isHighlighted, expanded = false } = data;
+
+  // Force re-render when expanded changes by using it in a way that affects rendering
+  const visibleColumns = expanded ? table.columns : table.columns.slice(0, 10);
 
   return (
     <>
@@ -47,8 +51,11 @@ export const FlowTableNode = memo(({ data, selected }: NodeProps<TableNodeData>)
           </div>
         </CardHeader>
         <CardContent className="pt-3 pb-3">
-          <div className="space-y-1.5 max-h-48 overflow-y-auto">
-            {table.columns.slice(0, 10).map((column, idx) => (
+          <div className={cn(
+            "space-y-1.5",
+            expanded ? "" : "max-h-48 overflow-y-auto"
+          )}>
+            {visibleColumns.map((column, idx) => (
               <div
                 key={column.name}
                 className={cn(
@@ -75,7 +82,7 @@ export const FlowTableNode = memo(({ data, selected }: NodeProps<TableNodeData>)
                 </span>
               </div>
             ))}
-            {table.columns.length > 10 && (
+            {!expanded && table.columns.length > 10 && (
               <div className="text-xs text-muted-foreground text-center py-1">
                 + {table.columns.length - 10} more
               </div>
@@ -85,6 +92,28 @@ export const FlowTableNode = memo(({ data, selected }: NodeProps<TableNodeData>)
       </Card>
     </>
   );
+};
+
+// Custom comparison function to ensure re-render when expanded state changes
+export const FlowTableNode = memo(FlowTableNodeComponent, (prevProps, nextProps) => {
+  // Re-render if expanded state changes
+  if (prevProps.data.expanded !== nextProps.data.expanded) {
+    return false; // false means "not equal, re-render"
+  }
+  // Re-render if table data changes
+  if (prevProps.data.table !== nextProps.data.table) {
+    return false;
+  }
+  // Re-render if highlighted state changes
+  if (prevProps.data.isHighlighted !== nextProps.data.isHighlighted) {
+    return false;
+  }
+  // Re-render if selected state changes
+  if (prevProps.selected !== nextProps.selected) {
+    return false;
+  }
+  // Otherwise, skip re-render
+  return true; // true means "equal, skip re-render"
 });
 
 FlowTableNode.displayName = "FlowTableNode";

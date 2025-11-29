@@ -256,6 +256,8 @@ export interface DiagramNode {
       }>;
       rowCount?: number;
       size?: string;
+      indexes?: Index[];
+      foreignKeys?: ForeignKey[];
     };
     isHighlighted?: boolean;
   };
@@ -274,10 +276,7 @@ export interface DiagramEdge {
     strokeWidth: number;
     opacity?: number;
   };
-  markerEnd?: {
-    type: string;
-    color: string;
-  };
+  markerEnd?: any; // ReactFlow MarkerType
 }
 
 export interface DiagramResponse {

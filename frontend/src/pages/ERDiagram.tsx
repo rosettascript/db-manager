@@ -20,6 +20,7 @@ import {
   ZoomIn,
   ZoomOut,
   Maximize,
+  Maximize2,
   Download,
   Layout,
   Move,
@@ -29,6 +30,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { FlowTableNode, TableNodeData } from "@/components/diagram/FlowTableNode";
 import { DiagramFilters } from "@/components/diagram/DiagramFilters";
 import { toast } from "sonner";
@@ -47,13 +50,101 @@ import { useConnection } from "@/contexts/ConnectionContext";
 import { diagramService, schemasService } from "@/lib/api";
 import type { DiagramNode, DiagramEdge, Table } from "@/lib/api/types";
 
+// Default node types
 const nodeTypes = {
   tableNode: FlowTableNode,
 };
 
+// Separate component for fullscreen view to avoid ReactFlow context conflicts
+const FullscreenDiagramView = ({
+  nodes,
+  edges,
+  onNodeMouseEnter,
+  onNodeMouseLeave,
+  expanded,
+  fitTrigger,
+}: {
+  nodes: Node<TableNodeData>[];
+  edges: Edge[];
+  onNodeMouseEnter: (event: React.MouseEvent, node: Node) => void;
+  onNodeMouseLeave: () => void;
+  expanded: boolean;
+  fitTrigger: number;
+}) => {
+  const [fullscreenNodes, setFullscreenNodes, onFullscreenNodesChange] = useNodesState(nodes);
+  const [fullscreenEdges, setFullscreenEdges, onFullscreenEdgesChange] = useEdgesState(edges);
+  const { fitView } = useReactFlow();
+
+  // Sync nodes and edges when they change
+  useEffect(() => {
+    setFullscreenNodes(nodes);
+  }, [nodes, setFullscreenNodes]);
+
+  useEffect(() => {
+    setFullscreenEdges(edges);
+  }, [edges, setFullscreenEdges]);
+
+  // Fit view when trigger changes
+  useEffect(() => {
+    if (fitTrigger > 0) {
+      fitView({ duration: 0, padding: 0.1 });
+    }
+  }, [fitTrigger, fitView]);
+
+  return (
+    <ReactFlow
+      nodes={fullscreenNodes}
+      edges={fullscreenEdges}
+      onNodesChange={onFullscreenNodesChange}
+      onEdgesChange={onFullscreenEdgesChange}
+      onNodeMouseEnter={onNodeMouseEnter}
+      onNodeMouseLeave={onNodeMouseLeave}
+      nodeTypes={nodeTypes}
+      connectionLineType={ConnectionLineType.SmoothStep}
+      fitView
+      minZoom={0.1}
+      maxZoom={2}
+      defaultEdgeOptions={{
+        type: "smoothstep",
+        animated: false,
+      }}
+      proOptions={{ hideAttribution: true }}
+    >
+      <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
+      <Controls showInteractive={false} />
+      <MiniMap
+        nodeColor={(node) => {
+          if (node.data?.isHighlighted) return "hsl(var(--accent))";
+          return "hsl(var(--primary))";
+        }}
+        maskColor="rgba(0, 0, 0, 0.1)"
+        className="!bg-card/95 !border !border-border"
+      />
+      <Panel position="bottom-left" className="bg-card border border-border rounded-lg px-4 py-2 shadow-lg">
+        <div className="flex items-center gap-6 text-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-primary animate-pulse-glow" />
+            <span className="text-muted-foreground">Primary Key</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-accent" />
+            <span className="text-muted-foreground">Foreign Key</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Move className="w-4 h-4 text-muted-foreground" />
+            <span className="text-muted-foreground">
+              Drag tables • Mouse wheel to zoom • {nodes.length} table{nodes.length !== 1 ? 's' : ''}
+            </span>
+          </div>
+        </div>
+      </Panel>
+    </ReactFlow>
+  );
+};
+
 const ERDiagramContent = () => {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const { fitView, zoomIn, zoomOut } = useReactFlow();
+  const { fitView, zoomIn, zoomOut, getViewport, setViewport } = useReactFlow();
   const { activeConnection } = useConnection();
   
   const [showRelationships, setShowRelationships] = useState(true);
@@ -61,6 +152,13 @@ const ERDiagramContent = () => {
   const [selectedSchemas, setSelectedSchemas] = useState<string[]>([]);
   const [currentLayout, setCurrentLayout] = useState<LayoutAlgorithm>("grid");
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [nodesExpanded, setNodesExpanded] = useState(false);
+  const [fullscreenFitTrigger, setFullscreenFitTrigger] = useState(0);
+
+  const fullscreenDiagramRef = useRef<HTMLDivElement>(null);
 
   // Fetch available schemas for filtering
   const {
@@ -214,13 +312,21 @@ const ERDiagramContent = () => {
     
     // Merge API nodes with saved positions (only for nodes that exist)
     const nodesWithSavedPositions = apiNodes.map((node) => {
-      if (savedPositions && savedPositions[node.id]) {
-        return {
-          ...node,
-          position: savedPositions[node.id],
-        };
-      }
-      return node;
+      const nodeWithPosition = savedPositions && savedPositions[node.id]
+        ? {
+            ...node,
+            position: savedPositions[node.id],
+          }
+        : node;
+      
+      // Add expanded state to node data
+      return {
+        ...nodeWithPosition,
+        data: {
+          ...nodeWithPosition.data,
+          expanded: nodesExpanded,
+        },
+      };
     });
     
     // Clean up saved positions for nodes that no longer exist
@@ -252,7 +358,28 @@ const ERDiagramContent = () => {
         fitView({ duration: 400, padding: 0.1 });
       }, 200);
     }
-  }, [apiNodes, apiEdges, setNodes, setEdges, fitView, loadSavedPositions]);
+  }, [apiNodes, apiEdges, setNodes, setEdges, fitView, loadSavedPositions, nodesExpanded]);
+
+  // Update expanded state in existing nodes when nodesExpanded changes
+  // This ensures nodes are updated even if the state changes from other sources
+  useEffect(() => {
+    if (nodes.length === 0) return;
+    
+    setNodes((nds) => {
+      // Check if any node needs updating
+      const needsUpdate = nds.some(node => node.data?.expanded !== nodesExpanded);
+      if (!needsUpdate) return nds;
+      
+      // Update all nodes with the new expanded state
+      return nds.map((node) => ({
+        ...node,
+        data: {
+          ...node.data,
+          expanded: nodesExpanded,
+        },
+      }));
+    });
+  }, [nodesExpanded, setNodes, nodes.length]);
 
   // Save positions whenever nodes change (debounced)
   useEffect(() => {
@@ -357,7 +484,8 @@ const ERDiagramContent = () => {
   const handleAutoLayout = useCallback(
     async (algorithm: LayoutAlgorithm) => {
       setCurrentLayout(algorithm);
-      const layoutedNodes = await applyLayout(algorithm, nodes, edges);
+      // Pass expanded state to layout algorithms so they can adjust spacing
+      const layoutedNodes = await applyLayout(algorithm, nodes, edges, nodesExpanded);
       setNodes(layoutedNodes);
       
       // Fit view after a short delay to ensure layout is applied
@@ -371,9 +499,9 @@ const ERDiagramContent = () => {
         hierarchical: "Hierarchical",
         circular: "Circular",
       };
-      toast.success(`Applied ${layoutNames[algorithm]} layout`);
+      toast.success(`Applied ${layoutNames[algorithm]} layout${nodesExpanded ? ' (expanded nodes)' : ''}`);
     },
-    [nodes, edges, setNodes, fitView]
+    [nodes, edges, setNodes, fitView, nodesExpanded]
   );
 
   const handleFitView = useCallback(() => {
@@ -390,55 +518,597 @@ const ERDiagramContent = () => {
   }, [zoomOut]);
 
   const handleExportPNG = useCallback(async () => {
-    if (!reactFlowWrapper.current) return;
+    if (!reactFlowWrapper.current || isExporting || nodes.length === 0) return;
+
+    setIsExporting(true);
+    setExportProgress(0);
+
+    // Show loading toast with progress bar
+    const toastId = toast.loading("Preparing export...", {
+      description: (
+        <div className="w-full mt-2">
+          <Progress value={0} className="h-2" />
+        </div>
+      ),
+    });
+
+    let currentViewport: any = null;
 
     try {
-      const dataUrl = await toPng(reactFlowWrapper.current, {
+      // Save current viewport to restore later
+      currentViewport = getViewport();
+
+      // Temporarily fit the view to capture the entire diagram
+      fitView({ duration: 0, padding: 0.1 });
+
+      // Wait for the fit to complete (ReactFlow needs a moment to update)
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Find the ReactFlow elements
+      const reactFlowViewport = reactFlowWrapper.current.querySelector('.react-flow__viewport') as HTMLElement;
+      const reactFlowPane = reactFlowWrapper.current.querySelector('.react-flow__renderer') as HTMLElement;
+
+      if (!reactFlowViewport || !reactFlowPane) {
+        toast.error("Could not find diagram element", { id: toastId });
+        setIsExporting(false);
+        return;
+      }
+
+
+      // Start progress animation
+      let currentProgress = 0;
+      let progressInterval: NodeJS.Timeout | null = null;
+      let isExportComplete = false;
+      
+      const updateProgress = () => {
+        if (!isExportComplete && currentProgress < 95) {
+          let increment: number;
+          if (currentProgress < 30) {
+            increment = 4 + Math.random() * 3;
+          } else if (currentProgress < 70) {
+            increment = 2 + Math.random() * 2;
+          } else {
+            increment = 0.5 + Math.random() * 1;
+          }
+          currentProgress = Math.min(currentProgress + increment, 95);
+          setExportProgress(currentProgress);
+          toast.loading("Generating high-quality image...", {
+            id: toastId,
+            description: (
+              <div className="w-full mt-2 space-y-1">
+                <Progress value={currentProgress} className="h-2" />
+                <p className="text-xs text-muted-foreground">{Math.round(currentProgress)}%</p>
+              </div>
+            ),
+          });
+        }
+      };
+
+      progressInterval = setInterval(updateProgress, 150);
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
+      // Since SVG export works, use it and convert to PNG properly
+      // Find the ReactFlow viewport (same as SVG export)
+      const targetElement = reactFlowViewport || reactFlowWrapper.current;
+      
+      if (!targetElement) {
+        toast.error("Could not find diagram element", { id: toastId });
+        setIsExporting(false);
+        return;
+      }
+      
+      // Export as SVG first (which we know works and captures everything)
+      const svgDataUrl = await toSvg(targetElement, {
         backgroundColor: "white",
+        quality: 1.0,
         filter: (node) => {
-          // Exclude controls and other UI elements
           if (node.classList?.contains("react-flow__controls")) return false;
           if (node.classList?.contains("react-flow__minimap")) return false;
           if (node.classList?.contains("react-flow__panel")) return false;
+          if (node.classList?.contains("react-flow__background")) return true;
           return true;
         },
       });
+      
+      // Parse SVG to get actual dimensions
+      let svgText = '';
+      if (svgDataUrl.includes('base64')) {
+        // Base64 encoded
+        const base64Data = svgDataUrl.split(',')[1];
+        svgText = atob(base64Data);
+      } else {
+        // URL encoded
+        svgText = decodeURIComponent(svgDataUrl.split(',')[1] || '');
+      }
+      
+      const parser = new DOMParser();
+      const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
+      const svgElement = svgDoc.documentElement;
+      
+      // Get dimensions from SVG
+      let svgWidth = parseFloat(svgElement.getAttribute('width') || '0');
+      let svgHeight = parseFloat(svgElement.getAttribute('height') || '0');
+
+      // If no explicit width/height, try viewBox
+      if (!svgWidth || !svgHeight || svgWidth === 0 || svgHeight === 0) {
+        const viewBox = svgElement.getAttribute('viewBox');
+        if (viewBox) {
+          const parts = viewBox.split(/\s+|,/).filter(p => p).map(parseFloat);
+          if (parts.length >= 4) {
+            svgWidth = parts[2];
+            svgHeight = parts[3];
+          }
+        }
+      }
+
+      // Final fallback: use viewport dimensions
+      if (!svgWidth || !svgHeight || svgWidth === 0 || svgHeight === 0) {
+        const viewportRect = reactFlowViewport.getBoundingClientRect();
+        svgWidth = viewportRect.width || 2000;
+        svgHeight = viewportRect.height || 2000;
+      }
+
+      // Convert SVG to PNG with high quality
+      const pixelRatio = 5; // Ultra-high quality
+      
+      // Create an image from the SVG
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      // Wait for image to load
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = reject;
+        img.src = svgDataUrl;
+      });
+      
+      // Use the actual SVG dimensions for canvas
+      const canvas = document.createElement('canvas');
+      canvas.width = svgWidth * pixelRatio;
+      canvas.height = svgHeight * pixelRatio;
+      
+      // Draw the SVG image to canvas at high resolution
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error('Could not get canvas context');
+      }
+      
+      // Fill the ENTIRE canvas with white background first
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Draw the SVG image at full size
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      
+      // Convert canvas to PNG
+      const dataUrl = canvas.toDataURL('image/png', 1.0);
+      
+      // Mark export as complete
+      isExportComplete = true;
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
+      setExportProgress(100);
+      
+      // Show completion briefly
+      toast.loading("Finalizing export...", {
+        id: toastId,
+        description: (
+          <div className="w-full mt-2 space-y-1">
+            <Progress value={100} className="h-2" />
+            <p className="text-xs text-muted-foreground">100%</p>
+          </div>
+        ),
+      });
+
+      // Small delay to show 100% progress
+      await new Promise(resolve => setTimeout(resolve, 200));
 
       const link = document.createElement("a");
       link.download = `er-diagram-${Date.now()}.png`;
       link.href = dataUrl;
       link.click();
-      toast.success("Exported as PNG");
+      
+      // Restore the original viewport
+      setViewport(currentViewport);
+
+      toast.success("Exported as ultra-high quality PNG (5x resolution)", { id: toastId });
+      setIsExporting(false);
+      setExportProgress(0);
     } catch (error) {
       console.error("Export error:", error);
-      toast.error("Failed to export diagram");
+      // Restore viewport even on error
+      setViewport(currentViewport);
+      toast.error("Failed to export diagram", { id: toastId });
+      setIsExporting(false);
+      setExportProgress(0);
     }
-  }, []);
+  }, [isExporting]);
 
   const handleExportSVG = useCallback(async () => {
-    if (!reactFlowWrapper.current) return;
+    if (!reactFlowWrapper.current || isExporting) return;
+
+    setIsExporting(true);
+    setExportProgress(0);
+
+    // Show loading toast with progress bar
+    const toastId = toast.loading("Preparing export...", {
+      description: (
+        <div className="w-full mt-2">
+          <Progress value={0} className="h-2" />
+        </div>
+      ),
+    });
 
     try {
-      const dataUrl = await toSvg(reactFlowWrapper.current, {
+      // Find the ReactFlow viewport or use the wrapper as fallback
+      const reactFlowViewport = reactFlowWrapper.current.querySelector('.react-flow__viewport') as HTMLElement;
+      const targetElement = reactFlowViewport || reactFlowWrapper.current;
+      
+      if (!targetElement) {
+        toast.error("Could not find diagram element", { id: toastId });
+        setIsExporting(false);
+        return;
+      }
+
+      // Start progress animation immediately and keep it running
+      let currentProgress = 0;
+      let progressInterval: NodeJS.Timeout | null = null;
+      let isExportComplete = false;
+      
+      // Function to update progress
+      const updateProgress = () => {
+        if (!isExportComplete && currentProgress < 95) {
+          // Variable speed: faster at start, slower near end
+          let increment: number;
+          if (currentProgress < 30) {
+            increment = 4 + Math.random() * 3; // Fast start
+          } else if (currentProgress < 70) {
+            increment = 2 + Math.random() * 2; // Medium speed
+          } else {
+            increment = 0.5 + Math.random() * 1; // Slow near end
+          }
+          currentProgress = Math.min(currentProgress + increment, 95);
+          setExportProgress(currentProgress);
+          toast.loading("Generating vector image...", {
+            id: toastId,
+            description: (
+              <div className="w-full mt-2 space-y-1">
+                <Progress value={currentProgress} className="h-2" />
+                <p className="text-xs text-muted-foreground">{Math.round(currentProgress)}%</p>
+              </div>
+            ),
+          });
+        }
+      };
+
+      // Start progress animation immediately
+      progressInterval = setInterval(updateProgress, 150);
+
+      // Small delay to ensure progress bar is visible before starting export
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // SVG is vectorized, so it scales perfectly at any zoom level
+      const dataUrl = await toSvg(targetElement, {
         backgroundColor: "white",
+        quality: 1.0,
         filter: (node) => {
+          // Exclude controls and other UI elements
           if (node.classList?.contains("react-flow__controls")) return false;
           if (node.classList?.contains("react-flow__minimap")) return false;
           if (node.classList?.contains("react-flow__panel")) return false;
+          // Include background for better visual context
+          if (node.classList?.contains("react-flow__background")) return true;
           return true;
         },
       });
+
+      // Mark export as complete and finish progress
+      isExportComplete = true;
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
+      setExportProgress(100);
+      
+      // Show completion briefly
+      toast.loading("Finalizing export...", {
+        id: toastId,
+        description: (
+          <div className="w-full mt-2 space-y-1">
+            <Progress value={100} className="h-2" />
+            <p className="text-xs text-muted-foreground">100%</p>
+          </div>
+        ),
+      });
+
+      // Small delay to show 100% progress
+      await new Promise(resolve => setTimeout(resolve, 300));
 
       const link = document.createElement("a");
       link.download = `er-diagram-${Date.now()}.svg`;
       link.href = dataUrl;
       link.click();
-      toast.success("Exported as SVG");
+      
+      toast.success("Exported as SVG (vectorized, perfect for zooming!)", { id: toastId });
+      setIsExporting(false);
+      setExportProgress(0);
     } catch (error) {
       console.error("Export error:", error);
-      toast.error("Failed to export diagram");
+      toast.error("Failed to export diagram", { id: toastId });
+      setIsExporting(false);
+      setExportProgress(0);
     }
-  }, []);
+  }, [isExporting]);
+
+  // Export from fullscreen view
+  const handleExportFullscreenPNG = useCallback(async () => {
+    if (!fullscreenDiagramRef.current || isExporting) return;
+
+    setIsExporting(true);
+    setExportProgress(0);
+
+    const toastId = toast.loading("Preparing export...", {
+      description: (
+        <div className="w-full mt-2">
+          <Progress value={0} className="h-2" />
+        </div>
+      ),
+    });
+
+    try {
+      // Trigger fit view in fullscreen
+      setFullscreenFitTrigger(prev => prev + 1);
+
+      // Wait for fit to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      const reactFlowViewport = fullscreenDiagramRef.current.querySelector('.react-flow__viewport') as HTMLElement;
+      const targetElement = reactFlowViewport || fullscreenDiagramRef.current;
+
+      if (!targetElement) {
+        toast.error("Could not find diagram element", { id: toastId });
+        setIsExporting(false);
+        return;
+      }
+
+      let currentProgress = 0;
+      let progressInterval: NodeJS.Timeout | null = null;
+      let isExportComplete = false;
+
+      const updateProgress = () => {
+        if (!isExportComplete && currentProgress < 95) {
+          let increment: number;
+          if (currentProgress < 30) {
+            increment = 4 + Math.random() * 3;
+          } else if (currentProgress < 70) {
+            increment = 2 + Math.random() * 2;
+          } else {
+            increment = 0.5 + Math.random() * 1;
+          }
+          currentProgress = Math.min(currentProgress + increment, 95);
+          setExportProgress(currentProgress);
+          toast.loading("Generating ultra-high quality image...", {
+            id: toastId,
+            description: (
+              <div className="w-full mt-2 space-y-1">
+                <Progress value={currentProgress} className="h-2" />
+                <p className="text-xs text-muted-foreground">{Math.round(currentProgress)}%</p>
+              </div>
+            ),
+          });
+        }
+      };
+
+      progressInterval = setInterval(updateProgress, 150);
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      // Use SVG export method for consistent full diagram capture
+      const svgDataUrl = await toSvg(targetElement, {
+        backgroundColor: "white",
+        quality: 1.0,
+        filter: (node) => {
+          if (node.classList?.contains("react-flow__controls")) return false;
+          if (node.classList?.contains("react-flow__minimap")) return false;
+          if (node.classList?.contains("react-flow__panel")) return false;
+          if (node.classList?.contains("react-flow__background")) return true;
+          return true;
+        },
+      });
+
+      // Parse SVG to get actual dimensions
+      let svgText = '';
+      if (svgDataUrl.includes('base64')) {
+        const base64Data = svgDataUrl.split(',')[1];
+        svgText = atob(base64Data);
+      } else {
+        svgText = decodeURIComponent(svgDataUrl.split(',')[1] || '');
+      }
+
+      const parser = new DOMParser();
+      const svgDoc = parser.parseFromString(svgText, 'image/svg+xml');
+      const svgElement = svgDoc.documentElement;
+
+      let svgWidth = parseFloat(svgElement.getAttribute('width') || '0');
+      let svgHeight = parseFloat(svgElement.getAttribute('height') || '0');
+
+      if (!svgWidth || !svgHeight || svgWidth === 0 || svgHeight === 0) {
+        const viewBox = svgElement.getAttribute('viewBox');
+        if (viewBox) {
+          const parts = viewBox.split(/\s+|,/).filter(p => p).map(parseFloat);
+          if (parts.length >= 4) {
+            svgWidth = parts[2];
+            svgHeight = parts[3];
+          }
+        }
+      }
+
+      if (!svgWidth || !svgHeight || svgWidth === 0 || svgHeight === 0) {
+        const viewportRect = reactFlowViewport.getBoundingClientRect();
+        svgWidth = viewportRect.width || 2000;
+        svgHeight = viewportRect.height || 2000;
+      }
+
+      const pixelRatio = 6; // Maximum quality for fullscreen export
+
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = reject;
+        img.src = svgDataUrl;
+      });
+
+      const canvas = document.createElement('canvas');
+      canvas.width = svgWidth * pixelRatio;
+      canvas.height = svgHeight * pixelRatio;
+
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        throw new Error('Could not get canvas context');
+      }
+
+      ctx.fillStyle = 'white';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      const dataUrl = canvas.toDataURL('image/png', 1.0);
+
+      isExportComplete = true;
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
+      setExportProgress(100);
+      
+      toast.loading("Finalizing export...", {
+        id: toastId,
+        description: (
+          <div className="w-full mt-2 space-y-1">
+            <Progress value={100} className="h-2" />
+            <p className="text-xs text-muted-foreground">100%</p>
+          </div>
+        ),
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      const link = document.createElement("a");
+      link.download = `er-diagram-fullscreen-${Date.now()}.png`;
+      link.href = dataUrl;
+      link.click();
+      
+      toast.success("Exported as ultra-high quality PNG (4x resolution)", { id: toastId });
+      setIsExporting(false);
+      setExportProgress(0);
+    } catch (error) {
+      console.error("Export error:", error);
+      toast.error("Failed to export diagram", { id: toastId });
+      setIsExporting(false);
+      setExportProgress(0);
+    }
+  }, [isExporting]);
+
+  const handleExportFullscreenSVG = useCallback(async () => {
+    if (!fullscreenDiagramRef.current || isExporting) return;
+
+    setIsExporting(true);
+    setExportProgress(0);
+
+    const toastId = toast.loading("Preparing export...", {
+      description: (
+        <div className="w-full mt-2">
+          <Progress value={0} className="h-2" />
+        </div>
+      ),
+    });
+
+    try {
+      const reactFlowViewport = fullscreenDiagramRef.current.querySelector('.react-flow__viewport') as HTMLElement;
+      const targetElement = reactFlowViewport || fullscreenDiagramRef.current;
+      
+      if (!targetElement) {
+        toast.error("Could not find diagram element", { id: toastId });
+        setIsExporting(false);
+        return;
+      }
+
+      let currentProgress = 0;
+      let progressInterval: NodeJS.Timeout | null = null;
+      let isExportComplete = false;
+      
+      const updateProgress = () => {
+        if (!isExportComplete && currentProgress < 95) {
+          let increment: number;
+          if (currentProgress < 30) {
+            increment = 4 + Math.random() * 3;
+          } else if (currentProgress < 70) {
+            increment = 2 + Math.random() * 2;
+          } else {
+            increment = 0.5 + Math.random() * 1;
+          }
+          currentProgress = Math.min(currentProgress + increment, 95);
+          setExportProgress(currentProgress);
+          toast.loading("Generating vector image...", {
+            id: toastId,
+            description: (
+              <div className="w-full mt-2 space-y-1">
+                <Progress value={currentProgress} className="h-2" />
+                <p className="text-xs text-muted-foreground">{Math.round(currentProgress)}%</p>
+              </div>
+            ),
+          });
+        }
+      };
+
+      progressInterval = setInterval(updateProgress, 150);
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      const dataUrl = await toSvg(targetElement, {
+        backgroundColor: "white",
+        quality: 1.0,
+        filter: (node) => {
+          if (node.classList?.contains("react-flow__controls")) return false;
+          if (node.classList?.contains("react-flow__minimap")) return false;
+          if (node.classList?.contains("react-flow__panel")) return false;
+          if (node.classList?.contains("react-flow__background")) return true;
+          return true;
+        },
+      });
+
+      isExportComplete = true;
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
+      setExportProgress(100);
+      
+      toast.loading("Finalizing export...", {
+        id: toastId,
+        description: (
+          <div className="w-full mt-2 space-y-1">
+            <Progress value={100} className="h-2" />
+            <p className="text-xs text-muted-foreground">100%</p>
+          </div>
+        ),
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 300));
+
+      const link = document.createElement("a");
+      link.download = `er-diagram-fullscreen-${Date.now()}.svg`;
+      link.href = dataUrl;
+      link.click();
+      
+      toast.success("Exported as SVG (vectorized, perfect for zooming!)", { id: toastId });
+      setIsExporting(false);
+      setExportProgress(0);
+    } catch (error) {
+      console.error("Export error:", error);
+      toast.error("Failed to export diagram", { id: toastId });
+      setIsExporting(false);
+      setExportProgress(0);
+    }
+  }, [isExporting]);
 
   // Filter edges based on showRelationships
   const visibleEdges = useMemo(() => {
@@ -463,6 +1133,9 @@ const ERDiagramContent = () => {
 
   // Get schema names for filter
   const schemaNames = useMemo(() => schemas.map(s => s.name), [schemas]);
+
+  // Use stable node types - expanded state is passed through node data
+  const memoizedNodeTypes = useMemo(() => nodeTypes, []);
 
 
   return (
@@ -548,6 +1221,59 @@ const ERDiagramContent = () => {
             <Button variant="outline" size="sm" onClick={handleFitView}>
               <Maximize className="w-4 h-4" />
             </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="gap-2"
+              onClick={async () => {
+                const newExpandedState = !nodesExpanded;
+                setNodesExpanded(newExpandedState);
+                
+                // First, update all nodes with the new expanded state
+                const updatedNodes = nodes.map((node) => ({
+                  ...node,
+                  data: {
+                    ...node.data,
+                    expanded: newExpandedState,
+                  },
+                }));
+                
+                // Auto-reapply current layout with new expanded state to prevent overlaps
+                if (updatedNodes.length > 0 && currentLayout) {
+                  try {
+                    const layoutedNodes = await applyLayout(currentLayout, updatedNodes, edges, newExpandedState);
+                    setNodes(layoutedNodes);
+                    
+                    setTimeout(() => {
+                      fitView({ duration: 400, padding: 0.1 });
+                    }, 100);
+                  } catch (error) {
+                    console.error("Layout reapply error:", error);
+                    // If layout fails, still update nodes with expanded state
+                    setNodes(updatedNodes);
+                  }
+                } else {
+                  // If no layout, just update nodes with expanded state
+                  setNodes(updatedNodes);
+                }
+                
+                toast.success(newExpandedState ? "Expanded all table nodes - all columns visible" : "Collapsed table nodes");
+              }}
+              disabled={nodes.length === 0}
+            >
+              <Maximize2 className="w-4 h-4" />
+              {nodesExpanded ? "Collapse" : "Expand All"}
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="gap-2"
+              onClick={() => setIsFullscreen(true)}
+              disabled={nodes.length === 0}
+            >
+              <Maximize className="w-4 h-4" />
+              Fullscreen
+            </Button>
             
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -557,11 +1283,31 @@ const ERDiagramContent = () => {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleExportPNG}>
-                  Export as PNG
+                <DropdownMenuItem onClick={handleExportPNG} disabled={isExporting}>
+                  <div className="flex flex-col w-full">
+                    <div className="flex items-center gap-2">
+                      {isExporting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
+                      <span>Export as PNG</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">Ultra-high resolution (5x)</span>
+                  </div>
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleExportSVG}>
-                  Export as SVG
+                <DropdownMenuItem onClick={handleExportSVG} disabled={isExporting}>
+                  <div className="flex flex-col w-full">
+                    <div className="flex items-center gap-2">
+                      {isExporting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
+                      <span>Export as SVG</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground">Vector format (perfect for zooming)</span>
+                  </div>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -630,7 +1376,7 @@ const ERDiagramContent = () => {
             onEdgesChange={onEdgesChange}
             onNodeMouseEnter={onNodeMouseEnter}
             onNodeMouseLeave={onNodeMouseLeave}
-            nodeTypes={nodeTypes}
+            nodeTypes={memoizedNodeTypes}
             connectionLineType={ConnectionLineType.SmoothStep}
             fitView
             minZoom={0.1}
@@ -672,6 +1418,59 @@ const ERDiagramContent = () => {
         </ReactFlow>
         )}
       </div>
+
+      {/* Fullscreen Diagram Dialog */}
+      <Dialog open={isFullscreen} onOpenChange={setIsFullscreen}>
+        <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 flex flex-col">
+          <DialogHeader className="px-6 py-4 border-b flex-shrink-0 pr-12">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-xl font-bold">
+                ER Diagram - Full View
+              </DialogTitle>
+              <div className="flex items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2" disabled={isExporting}>
+                      {isExporting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
+                      Export
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleExportFullscreenPNG} disabled={isExporting}>
+                      <div className="flex flex-col">
+                        <span>Export as PNG</span>
+                        <span className="text-xs text-muted-foreground">Ultra-high resolution (4x)</span>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportFullscreenSVG} disabled={isExporting}>
+                      <div className="flex flex-col">
+                        <span>Export as SVG</span>
+                        <span className="text-xs text-muted-foreground">Vector format (perfect for zooming)</span>
+                      </div>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="flex-1 relative" ref={fullscreenDiagramRef}>
+            <ReactFlowProvider>
+              <FullscreenDiagramView
+                nodes={nodes}
+                edges={visibleEdges}
+                onNodeMouseEnter={onNodeMouseEnter}
+                onNodeMouseLeave={onNodeMouseLeave}
+                expanded={nodesExpanded}
+                fitTrigger={fullscreenFitTrigger}
+              />
+            </ReactFlowProvider>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

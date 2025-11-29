@@ -1,7 +1,7 @@
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Table2, Download, Filter, RefreshCcw, Key, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Search, Copy, Check, Loader2, AlertCircle, Trash2, Edit, Plus, X } from "lucide-react";
+import { Table2, Download, Filter, RefreshCcw, Key, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Search, Copy, Check, Loader2, AlertCircle, Trash2, Edit, Plus, X, Maximize2 } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useKeyboardShortcut } from "@/hooks/useKeyboardShortcut";
@@ -42,7 +42,16 @@ import { AddRowDialog } from "@/components/table-viewer/AddRowDialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ShortcutTooltip } from "@/components/keyboard";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Progress } from "@/components/ui/progress";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
+import { toPng, toSvg } from "html-to-image";
 import { ErrorDisplay } from "@/components/error/ErrorDisplay";
 import { ConnectionErrorHandler } from "@/components/error/ConnectionErrorHandler";
 import { TableSkeleton } from "@/components/loading/LoadingSkeleton";
@@ -125,8 +134,14 @@ const TableViewer = () => {
   const [chartOptions, setChartOptions] = useState<ChartOptions | null>(null);
   const [isGeneratingChart, setIsGeneratingChart] = useState(false);
   
+  // Fullscreen state
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  
   const parentRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const fullscreenTableRef = useRef<HTMLDivElement>(null);
 
   // Debounce search for better performance
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
@@ -968,6 +983,173 @@ const TableViewer = () => {
     { enabled: activeTab === 'data' && !!table }
   );
 
+  // Toggle fullscreen with F11
+  useKeyboardShortcut(
+    'F11',
+    (e) => {
+      if (activeTab === 'data' && table) {
+        e.preventDefault();
+        setIsFullscreen(prev => !prev);
+      }
+    },
+    {},
+    { enabled: activeTab === 'data' && !!table }
+  );
+
+  // Export table as PNG (from fullscreen view)
+  const handleExportTablePNG = useCallback(async () => {
+    if (!fullscreenTableRef.current || isExporting) return;
+
+    setIsExporting(true);
+    setExportProgress(0);
+
+    const toastId = toast.loading("Preparing export...", {
+      description: (
+        <div className="w-full mt-2">
+          <Progress value={0} className="h-2" />
+        </div>
+      ),
+    });
+
+    try {
+      // Simulate smooth progress animation
+      let currentProgress = 0;
+      const progressInterval = setInterval(() => {
+        currentProgress = Math.min(currentProgress + 2 + Math.random() * 3, 85);
+        setExportProgress(currentProgress);
+        toast.loading("Generating high-quality image...", {
+          id: toastId,
+          description: (
+            <div className="w-full mt-2 space-y-1">
+              <Progress value={currentProgress} className="h-2" />
+              <p className="text-xs text-muted-foreground">{Math.round(currentProgress)}%</p>
+            </div>
+          ),
+        });
+      }, 80);
+
+      // Get dimensions
+      const { width, height } = fullscreenTableRef.current.getBoundingClientRect();
+      
+      // Use very high pixel ratio for maximum clarity (4x for ultra-high quality)
+      const pixelRatio = 4;
+      
+      const dataUrl = await toPng(fullscreenTableRef.current, {
+        backgroundColor: "white",
+        pixelRatio: pixelRatio,
+        width: width * pixelRatio,
+        height: height * pixelRatio,
+        quality: 1.0,
+        filter: (node) => {
+          // Exclude UI elements but keep table content
+          if (node.classList?.contains("react-flow__controls")) return false;
+          return true;
+        },
+      });
+
+      clearInterval(progressInterval);
+      setExportProgress(100);
+      
+      toast.loading("Finalizing export...", {
+        id: toastId,
+        description: (
+          <div className="w-full mt-2 space-y-1">
+            <Progress value={100} className="h-2" />
+            <p className="text-xs text-muted-foreground">100%</p>
+          </div>
+        ),
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      const link = document.createElement("a");
+      link.download = `table-${table?.name || 'export'}-${Date.now()}.png`;
+      link.href = dataUrl;
+      link.click();
+      
+      toast.success("Exported as high-quality PNG (4x resolution)", { id: toastId });
+      setIsExporting(false);
+      setExportProgress(0);
+    } catch (error) {
+      console.error("Export error:", error);
+      toast.error("Failed to export table", { id: toastId });
+      setIsExporting(false);
+      setExportProgress(0);
+    }
+  }, [isExporting, table]);
+
+  // Export table as SVG (from fullscreen view)
+  const handleExportTableSVG = useCallback(async () => {
+    if (!fullscreenTableRef.current || isExporting) return;
+
+    setIsExporting(true);
+    setExportProgress(0);
+
+    const toastId = toast.loading("Preparing export...", {
+      description: (
+        <div className="w-full mt-2">
+          <Progress value={0} className="h-2" />
+        </div>
+      ),
+    });
+
+    try {
+      // Simulate smooth progress animation
+      let currentProgress = 0;
+      const progressInterval = setInterval(() => {
+        currentProgress = Math.min(currentProgress + 2 + Math.random() * 3, 85);
+        setExportProgress(currentProgress);
+        toast.loading("Generating vector image...", {
+          id: toastId,
+          description: (
+            <div className="w-full mt-2 space-y-1">
+              <Progress value={currentProgress} className="h-2" />
+              <p className="text-xs text-muted-foreground">{Math.round(currentProgress)}%</p>
+            </div>
+          ),
+        });
+      }, 80);
+
+      const dataUrl = await toSvg(fullscreenTableRef.current, {
+        backgroundColor: "white",
+        quality: 1.0,
+        filter: (node) => {
+          if (node.classList?.contains("react-flow__controls")) return false;
+          return true;
+        },
+      });
+
+      clearInterval(progressInterval);
+      setExportProgress(100);
+      
+      toast.loading("Finalizing export...", {
+        id: toastId,
+        description: (
+          <div className="w-full mt-2 space-y-1">
+            <Progress value={100} className="h-2" />
+            <p className="text-xs text-muted-foreground">100%</p>
+          </div>
+        ),
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 200));
+
+      const link = document.createElement("a");
+      link.download = `table-${table?.name || 'export'}-${Date.now()}.svg`;
+      link.href = dataUrl;
+      link.click();
+      
+      toast.success("Exported as SVG (vectorized, perfect for zooming!)", { id: toastId });
+      setIsExporting(false);
+      setExportProgress(0);
+    } catch (error) {
+      console.error("Export error:", error);
+      toast.error("Failed to export table", { id: toastId });
+      setIsExporting(false);
+      setExportProgress(0);
+    }
+  }, [isExporting, table]);
+
   // Handle chart generation
   const handleGenerateChart = useCallback(async (options: ChartOptions) => {
     if (!activeConnection || !parsedTable || !table) {
@@ -1110,6 +1292,18 @@ const TableViewer = () => {
               >
                 <RefreshCcw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
                 Refresh
+              </Button>
+            </ShortcutTooltip>
+            <ShortcutTooltip shortcut="F11" description="Maximize table view">
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2"
+                onClick={() => setIsFullscreen(true)}
+                disabled={!table || activeTab !== 'data'}
+              >
+                <Maximize2 className="w-4 h-4" />
+                Maximize
               </Button>
             </ShortcutTooltip>
             {table && activeConnection && parsedTable && (
@@ -1723,6 +1917,242 @@ const TableViewer = () => {
           isInserting={isInserting}
         />
       )}
+
+      {/* Fullscreen Table Dialog */}
+      <Dialog open={isFullscreen} onOpenChange={setIsFullscreen}>
+        <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 flex flex-col">
+          <DialogHeader className="px-6 py-4 border-b flex-shrink-0 pr-12">
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-xl font-bold">
+                {table?.schema}.{table?.name} - Full View
+              </DialogTitle>
+              <div className="flex items-center gap-2">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="gap-2" disabled={isExporting}>
+                      {isExporting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Download className="w-4 h-4" />
+                      )}
+                      Export
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={handleExportTablePNG} disabled={isExporting}>
+                      <div className="flex flex-col">
+                        <span>Export as PNG</span>
+                        <span className="text-xs text-muted-foreground">Ultra-high resolution (4x)</span>
+                      </div>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={handleExportTableSVG} disabled={isExporting}>
+                      <div className="flex flex-col">
+                        <span>Export as SVG</span>
+                        <span className="text-xs text-muted-foreground">Vector format (perfect for zooming)</span>
+                      </div>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+          </DialogHeader>
+          <div className="flex-1 overflow-auto p-6" ref={fullscreenTableRef}>
+            <TooltipProvider>
+              <div className="border rounded-lg overflow-auto bg-background">
+                <div className="min-w-full inline-block">
+                  {/* Header */}
+                  <div className="sticky top-0 z-10 bg-table-header border-b">
+                    <div className="flex">
+                      <div className="w-12 px-3 py-3 text-center border-r bg-table-header flex items-center justify-center">
+                        <Checkbox
+                          checked={isAllSelected}
+                          onCheckedChange={handleSelectAll}
+                          className="cursor-pointer"
+                          aria-label="Select all rows"
+                        />
+                      </div>
+                      <div className="w-16 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider border-r bg-table-header">
+                        #
+                      </div>
+                      {/* Show ALL columns in fullscreen view, not just filtered ones */}
+                      {(table?.columns || []).map((column) => (
+                        <div
+                          key={column.name}
+                          className="text-left text-xs font-semibold uppercase tracking-wider border-r overflow-hidden bg-table-header"
+                          style={{ minWidth: columnWidths[column.name] || 200, width: columnWidths[column.name] || 200 }}
+                        >
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 gap-2 font-semibold flex items-center w-full max-w-full min-w-0 px-4 py-3"
+                                onClick={() => handleSort(column.name)}
+                              >
+                                <span className="truncate min-w-0 flex-1 text-left max-w-full">{column.name}</span>
+                                {column.isPrimaryKey && <Key className="w-3 h-3 text-primary flex-shrink-0" />}
+                                {sortColumn === column.name ? (
+                                  sortDirection === "asc" ? (
+                                    <ArrowUp className="w-3 h-3 flex-shrink-0" />
+                                  ) : (
+                                    <ArrowDown className="w-3 h-3 flex-shrink-0" />
+                                  )
+                                ) : (
+                                  <ArrowUpDown className="w-3 h-3 opacity-30 flex-shrink-0" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{column.name}</p>
+                              {column.type && <p className="text-xs text-muted-foreground mt-1">{column.type}</p>}
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Body - Show all rows without virtualization for full export */}
+                  {isLoading && paginatedData.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin opacity-50" />
+                      <p>Loading data...</p>
+                    </div>
+                  ) : dataError ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <AlertCircle className="w-6 h-6 mx-auto mb-2 opacity-20 text-destructive" />
+                      <p className="text-destructive">Failed to load table data</p>
+                    </div>
+                  ) : paginatedData.length === 0 ? (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <p>No data found</p>
+                    </div>
+                  ) : (
+                    paginatedData.map((row, idx) => {
+                      const rowId = getRowId(row, idx);
+                      const isSelected = selectedRows.has(rowId);
+                      const virtualItems = rowVirtualizer.getVirtualItems();
+                      const isLastVisibleRow = virtualItems.length > 0 && idx === paginatedData.length - 1;
+                      return (
+                        <div
+                          key={idx}
+                          className={cn(
+                            "flex border-b group hover:z-10 transition-all",
+                            isSelected && "bg-primary/5"
+                          )}
+                        >
+                          <div className="w-12 px-3 py-3 border-r bg-background group-hover:bg-muted flex items-center justify-center transition-colors">
+                            <Checkbox
+                              checked={isSelected}
+                              onCheckedChange={() => handleToggleRowSelection(rowId)}
+                              className="cursor-pointer"
+                              aria-label={`Select row ${idx + 1}`}
+                            />
+                          </div>
+                          <div className="w-16 px-4 py-3 font-mono text-xs text-muted-foreground border-r bg-background group-hover:bg-muted flex items-center transition-colors">
+                            {(currentPage - 1) * pageSizeNum + idx + 1}
+                          </div>
+                          {/* Show ALL columns in fullscreen view */}
+                          {(table?.columns || []).map((column) => {
+                            const cellId = `${idx}-${column.name}`;
+                            const value = row[column.name];
+                            const isForeignKey = column.isForeignKey;
+                            const displayValue = value !== null && value !== undefined 
+                              ? (isForeignKey ? value : String(value))
+                              : null;
+                            
+                            const isEditingThisCell = editMode && editingCell?.rowId === rowId && editingCell?.columnName === column.name;
+                            const canEdit = editMode && !column.isPrimaryKey && !isForeignKey;
+                            
+                            return (
+                              <div
+                                key={column.name}
+                                className="px-4 py-3 font-mono text-sm border-r group/cell relative flex items-center bg-background group-hover:bg-muted transition-colors"
+                                style={{ minWidth: columnWidths[column.name] || 200, width: columnWidths[column.name] || 200 }}
+                              >
+                                <div className="flex items-center justify-between gap-2 w-full min-w-0">
+                                  {isEditingThisCell ? (
+                                    <EditableCell
+                                      value={value}
+                                      column={column}
+                                      isEditing={true}
+                                      isSaving={isSavingCell}
+                                      onStartEdit={() => handleStartEditCell(rowId, column.name)}
+                                      onCancelEdit={handleCancelEditCell}
+                                      onSave={(newValue) => handleSaveCellEdit(rowId, column.name, newValue)}
+                                      className="flex-1 min-w-0"
+                                    />
+                                  ) : canEdit ? (
+                                    <EditableCell
+                                      value={value}
+                                      column={column}
+                                      isEditing={false}
+                                      onStartEdit={() => handleStartEditCell(rowId, column.name)}
+                                      onCancelEdit={handleCancelEditCell}
+                                      onSave={(newValue) => handleSaveCellEdit(rowId, column.name, newValue)}
+                                      className="flex-1 min-w-0"
+                                    />
+                                  ) : displayValue !== null ? (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <span className="truncate flex-1 min-w-0 cursor-default">
+                                          {isForeignKey && activeConnection && parsedTable ? (
+                                            <ForeignKeyCell 
+                                              value={value}
+                                              columnName={column.name}
+                                              connectionId={activeConnection.id}
+                                              schema={parsedTable.schema}
+                                              table={table}
+                                            />
+                                          ) : (
+                                            displayValue
+                                          )}
+                                        </span>
+                                      </TooltipTrigger>
+                                      <TooltipContent side={isLastVisibleRow ? "top" : "bottom"} className="max-w-md">
+                                        <div className="font-mono text-sm break-words whitespace-pre-wrap">
+                                          {String(value)}
+                                        </div>
+                                        {column.type && (
+                                          <div className="text-xs text-muted-foreground mt-1">
+                                            {column.type}
+                                          </div>
+                                        )}
+                                      </TooltipContent>
+                                    </Tooltip>
+                                  ) : (
+                                    <span className="truncate flex-1 min-w-0 text-muted-foreground italic">
+                                      NULL
+                                    </span>
+                                  )}
+                                  {!isForeignKey && !canEdit && !isEditingThisCell && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 opacity-0 group-hover/cell:opacity-100 transition-opacity flex-shrink-0"
+                                      onClick={() => handleCopyCell(value, cellId)}
+                                    >
+                                      {copiedCell === cellId ? (
+                                        <Check className="w-3 h-3 text-success" />
+                                      ) : (
+                                        <Copy className="w-3 h-3" />
+                                      )}
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </TooltipProvider>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
