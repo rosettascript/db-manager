@@ -1,0 +1,248 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 216 20% 98%;
+    --foreground: 215 25% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 15%;
+
+    --primary: 210 95% 48%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 214 15% 92%;
+    --secondary-foreground: 215 25% 15%;
+
+    --muted: 214 15% 94%;
+    --muted-foreground: 215 15% 45%;
+
+    --accent: 188 90% 45%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 20% 88%;
+    --input: 214 20% 90%;
+    --ring: 210 95% 48%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 215 25% 97%;
+    --sidebar-foreground: 215 20% 25%;
+    --sidebar-primary: 210 95% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 214 15% 92%;
+    --sidebar-accent-foreground: 215 25% 15%;
+    --sidebar-border: 214 20% 88%;
+    --sidebar-ring: 210 95% 48%;
+
+    /* Custom tokens for DB Visualizer */
+    --table-header: 215 25% 97%;
+    --table-row-hover: 210 95% 96%;
+    --code-bg: 215 25% 95%;
+    --success: 142 76% 36%;
+    --warning: 38 92% 50%;
+    --info: 210 95% 48%;
+  }
+
+  .dark {
+    --background: 222 47% 11%;
+    --foreground: 210 40% 96%;
+
+    --card: 224 44% 14%;
+    --card-foreground: 210 40% 96%;
+
+    --popover: 224 44% 14%;
+    --popover-foreground: 210 40% 96%;
+
+    --primary: 210 100% 56%;
+    --primary-foreground: 222 47% 11%;
+
+    --secondary: 215 28% 20%;
+    --secondary-foreground: 210 40% 96%;
+
+    --muted: 215 28% 18%;
+    --muted-foreground: 217 15% 60%;
+
+    --accent: 188 85% 48%;
+    --accent-foreground: 222 47% 11%;
+
+    --destructive: 0 63% 31%;
+    --destructive-foreground: 210 40% 96%;
+
+    --border: 215 28% 22%;
+    --input: 215 28% 20%;
+    --ring: 210 100% 56%;
+
+    --sidebar-background: 222 47% 9%;
+    --sidebar-foreground: 210 40% 90%;
+    --sidebar-primary: 210 100% 56%;
+    --sidebar-primary-foreground: 222 47% 11%;
+    --sidebar-accent: 215 28% 16%;
+    --sidebar-accent-foreground: 210 40% 96%;
+    --sidebar-border: 215 28% 18%;
+    --sidebar-ring: 210 100% 56%;
+
+    /* Custom tokens for DB Visualizer */
+    --table-header: 215 28% 16%;
+    --table-row-hover: 215 28% 20%;
+    --code-bg: 215 30% 15%;
+    --success: 142 70% 45%;
+    --warning: 38 92% 50%;
+    --info: 210 100% 56%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  /* Fade animations */
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% {
+      opacity: 1;
+      box-shadow: 0 0 8px hsl(var(--primary));
+    }
+    50% {
+      opacity: 0.8;
+      box-shadow: 0 0 16px hsl(var(--primary));
+    }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 0.3s ease-out;
+  }
+
+  .animate-fade-in-up {
+    animation: fade-in-up 0.4s ease-out;
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+
+  /* React Flow custom styles */
+  .react-flow__node {
+    cursor: grab;
+  }
+
+  .react-flow__node.selected {
+    cursor: grabbing;
+  }
+
+  .react-flow__edge-path {
+    transition: stroke 0.2s ease;
+  }
+
+  .react-flow__controls {
+    @apply shadow-lg border border-border;
+  }
+
+  .react-flow__controls-button {
+    @apply bg-card border-border;
+    @apply hover:bg-accent/10;
+  }
+
+  .react-flow__controls-button svg {
+    @apply fill-foreground;
+  }
+
+  .react-flow__minimap {
+    @apply shadow-lg;
+  }
+
+  .react-flow__background {
+    @apply bg-muted/20;
+  }
+
+  /* SQL Syntax Highlighting */
+  .sql-keyword {
+    color: hsl(210, 100%, 56%);
+    font-weight: 600;
+  }
+
+  .sql-string {
+    color: hsl(142, 70%, 45%);
+  }
+
+  .sql-number {
+    color: hsl(38, 92%, 50%);
+  }
+
+  .sql-comment {
+    color: hsl(215, 15%, 55%);
+    font-style: italic;
+  }
+
+  .sql-function {
+    color: hsl(280, 70%, 60%);
+  }
+
+  .sql-operator {
+    color: hsl(0, 70%, 55%);
+  }
+
+  .dark .sql-keyword {
+    color: hsl(210, 100%, 65%);
+  }
+
+  .dark .sql-string {
+    color: hsl(142, 70%, 55%);
+  }
+
+  .dark .sql-number {
+    color: hsl(38, 92%, 60%);
+  }
+
+  .dark .sql-comment {
+    color: hsl(215, 15%, 50%);
+  }
+
+  .dark .sql-function {
+    color: hsl(280, 70%, 70%);
+  }
+
+  .dark .sql-operator {
+    color: hsl(0, 70%, 65%);
+  }
+}
