@@ -187,7 +187,7 @@ export const EditableCell = ({
           disabled={isSaving}
           title="Cancel (Esc)"
         >
-          <X className="w-3 h-3 text-red-600" />
+          <X className="w-3 h-3 text-destructive" />
         </Button>
       </div>
     </div>

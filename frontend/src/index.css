@@ -78,8 +78,8 @@ All colors MUST be HSL.
     --accent: 188 85% 48%;
     --accent-foreground: 222 47% 11%;
 
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 96%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
 
     --border: 215 28% 22%;
     --input: 215 28% 20%;
@@ -247,6 +247,6 @@ All colors MUST be HSL.
   }
 
   .dark .sql-operator {
-    color: hsl(0, 70%, 65%);
+    color: hsl(0, 84%, 70%);
   }
 }

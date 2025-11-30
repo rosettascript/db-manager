@@ -114,8 +114,8 @@ export function QueryValidationPanel({ query, onQueryChange }: QueryValidationPa
                 </>
               ) : (
                 <>
-                  <XCircle className="w-5 h-5 text-red-500" />
-                  <span className="font-medium text-red-500">Query has errors</span>
+                  <XCircle className="w-5 h-5 text-destructive" />
+                  <span className="font-medium text-destructive">Query has errors</span>
                 </>
               )}
             </div>
