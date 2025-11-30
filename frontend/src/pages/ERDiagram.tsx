@@ -28,10 +28,13 @@ import {
   Layers,
   Loader2,
   RefreshCw,
+  Search,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { FlowTableNode, TableNodeData } from "@/components/diagram/FlowTableNode";
 import { DiagramFilters } from "@/components/diagram/DiagramFilters";
 import { toast } from "sonner";
@@ -150,7 +153,7 @@ const FullscreenDiagramView = ({
 
 const ERDiagramContent = () => {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
-  const { fitView, zoomIn, zoomOut, getViewport, setViewport } = useReactFlow();
+  const { fitView, zoomIn, zoomOut, getViewport, setViewport, getNode } = useReactFlow();
   const { activeConnection } = useConnection();
   
   const [showRelationships, setShowRelationships] = useState(true);
@@ -165,6 +168,8 @@ const ERDiagramContent = () => {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [nodesExpanded, setNodesExpanded] = useState(false);
   const [fullscreenFitTrigger, setFullscreenFitTrigger] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   const fullscreenDiagramRef = useRef<HTMLDivElement>(null);
 
@@ -547,6 +552,69 @@ const ERDiagramContent = () => {
     fitView({ duration: 400, padding: 0.1 });
     toast.success("Fit to view");
   }, [fitView]);
+
+  // Focus on a specific node by ID
+  const focusOnNode = useCallback((nodeId: string) => {
+    const node = getNode(nodeId);
+    if (!node || !node.position) return;
+
+    // Use fitView to focus on the specific node with padding
+    // This will automatically calculate the best zoom and position
+    fitView({ 
+      nodes: [{ id: nodeId }],
+      duration: 500,
+      padding: 0.2, // 20% padding around the node
+      maxZoom: 1.5, // Don't zoom in too much
+      minZoom: 0.3,
+    });
+    
+    // Also highlight the node by selecting it
+    setClickedNode(nodeId);
+    
+    // Keep it highlighted for a few seconds so user can see it
+    setTimeout(() => {
+      // User can manually deselect if they want
+    }, 3000);
+  }, [getNode, fitView]);
+
+  // Handle search - filter nodes and focus on first match
+  const handleSearch = useCallback((query: string) => {
+    setSearchQuery(query);
+    
+    if (!query.trim() || nodes.length === 0) {
+      setClickedNode(null);
+      return;
+    }
+
+    // Search for nodes matching the query (case-insensitive)
+    const searchLower = query.toLowerCase().trim();
+    const matchingNodes = nodes.filter((node) => {
+      const tableName = node.data?.table?.name?.toLowerCase() || "";
+      const schemaName = node.data?.table?.schema?.toLowerCase() || "";
+      const fullName = `${schemaName}.${tableName}`;
+      return tableName.includes(searchLower) || fullName.includes(searchLower);
+    });
+
+    if (matchingNodes.length > 0) {
+      // Focus on the first matching node
+      const firstMatch = matchingNodes[0];
+      focusOnNode(firstMatch.id);
+      
+      if (matchingNodes.length > 1) {
+        toast.info(`Found ${matchingNodes.length} tables. Showing first match: ${firstMatch.data?.table?.name}`, {
+          duration: 2000,
+        });
+      } else {
+        toast.success(`Focused on: ${firstMatch.data?.table?.name}`, {
+          duration: 1500,
+        });
+      }
+    } else {
+      toast.error(`No table found matching "${query}"`, {
+        duration: 2000,
+      });
+    }
+  }, [nodes, focusOnNode]);
 
   const handleZoomIn = useCallback(() => {
     zoomIn({ duration: 200 });
@@ -1172,6 +1240,30 @@ const ERDiagramContent = () => {
   // Use stable node types - expanded state is passed through node data
   const memoizedNodeTypes = useMemo(() => nodeTypes, []);
 
+  // Keyboard shortcut for search (Ctrl+K / Cmd+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check if Ctrl+K (Windows/Linux) or Cmd+K (Mac) is pressed
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        // Only focus if search input exists and we have nodes
+        if (searchInputRef.current && nodes.length > 0) {
+          searchInputRef.current.focus();
+          searchInputRef.current.select();
+        }
+      }
+      // Allow Escape to clear search
+      if (e.key === 'Escape' && document.activeElement === searchInputRef.current) {
+        setSearchQuery("");
+        setClickedNode(null);
+        searchInputRef.current?.blur();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [nodes.length]);
+
 
   return (
     <div className="h-full flex flex-col bg-muted/20">
@@ -1199,6 +1291,49 @@ const ERDiagramContent = () => {
               showIsolatedTables={showIsolatedTables}
               onToggleIsolatedTables={handleToggleIsolatedTables}
             />
+            
+            {/* Search input */}
+            <div className="relative w-64">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Search tables... (Ctrl+K)"
+                value={searchQuery}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setSearchQuery(value);
+                  // Clear selection when search is cleared
+                  if (!value.trim()) {
+                    setClickedNode(null);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    handleSearch(searchQuery);
+                  } else if (e.key === "Escape") {
+                    setSearchQuery("");
+                    setClickedNode(null);
+                    searchInputRef.current?.blur();
+                  }
+                }}
+                className="pl-9 pr-8 h-9"
+                disabled={nodes.length === 0}
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => {
+                    setSearchQuery("");
+                    setClickedNode(null);
+                    searchInputRef.current?.focus();
+                  }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  type="button"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
             
             <Button
               variant="outline"
