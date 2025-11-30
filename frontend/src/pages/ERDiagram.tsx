@@ -37,6 +37,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Input } from "@/components/ui/input";
 import { FlowTableNode, TableNodeData } from "@/components/diagram/FlowTableNode";
 import { DiagramFilters } from "@/components/diagram/DiagramFilters";
+import { RelationshipPopup } from "@/components/diagram/RelationshipPopup";
 import { toast } from "sonner";
 import {
   applyLayout,
@@ -170,6 +171,7 @@ const ERDiagramContent = () => {
   const [fullscreenFitTrigger, setFullscreenFitTrigger] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [selectedNodeForRelationships, setSelectedNodeForRelationships] = useState<Node<TableNodeData> | null>(null);
 
   const fullscreenDiagramRef = useRef<HTMLDivElement>(null);
 
@@ -429,12 +431,14 @@ const ERDiagramContent = () => {
   }, []);
 
   const onNodeClick = useCallback(
-    (_: React.MouseEvent, node: Node) => {
+    (_: React.MouseEvent, node: Node<TableNodeData>) => {
       // Toggle selection: if clicking the same node, deselect it; otherwise select the new node
       if (clickedNode === node.id) {
         setClickedNode(null);
+        setSelectedNodeForRelationships(null);
       } else {
         setClickedNode(node.id);
+        setSelectedNodeForRelationships(node);
       }
       // Effect will handle highlighting
     },
@@ -444,6 +448,7 @@ const ERDiagramContent = () => {
   const onPaneClick = useCallback(() => {
     // Clicking on empty space deselects the clicked node
     setClickedNode(null);
+    setSelectedNodeForRelationships(null);
   }, []);
 
   // Use a ref to store the current edges to avoid infinite loops
@@ -554,7 +559,7 @@ const ERDiagramContent = () => {
   }, [fitView]);
 
   // Focus on a specific node by ID
-  const focusOnNode = useCallback((nodeId: string) => {
+  const focusOnNode = useCallback((nodeId: string, openRelationships: boolean = false) => {
     const node = getNode(nodeId);
     if (!node || !node.position) return;
 
@@ -571,11 +576,19 @@ const ERDiagramContent = () => {
     // Also highlight the node by selecting it
     setClickedNode(nodeId);
     
+    // Open relationship popup if requested
+    if (openRelationships) {
+      const nodeWithData = nodes.find((n) => n.id === nodeId);
+      if (nodeWithData) {
+        setSelectedNodeForRelationships(nodeWithData);
+      }
+    }
+    
     // Keep it highlighted for a few seconds so user can see it
     setTimeout(() => {
       // User can manually deselect if they want
     }, 3000);
-  }, [getNode, fitView]);
+  }, [getNode, fitView, nodes]);
 
   // Handle search - filter nodes and focus on first match
   const handleSearch = useCallback((query: string) => {
@@ -596,9 +609,9 @@ const ERDiagramContent = () => {
     });
 
     if (matchingNodes.length > 0) {
-      // Focus on the first matching node
+      // Focus on the first matching node and open relationships
       const firstMatch = matchingNodes[0];
-      focusOnNode(firstMatch.id);
+      focusOnNode(firstMatch.id, true); // true = open relationship popup
       
       if (matchingNodes.length > 1) {
         toast.info(`Found ${matchingNodes.length} tables. Showing first match: ${firstMatch.data?.table?.name}`, {
@@ -1646,6 +1659,40 @@ const ERDiagramContent = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Relationship Popup */}
+      {selectedNodeForRelationships && selectedNodeForRelationships.data?.table && (
+        <>
+          {/* Backdrop to close popup on outside click */}
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => {
+              setSelectedNodeForRelationships(null);
+              setClickedNode(null);
+            }}
+          />
+          <RelationshipPopup
+            table={selectedNodeForRelationships.data.table}
+            allNodes={nodes.map((n) => ({
+              id: n.id,
+              data: { table: n.data?.table! },
+            }))}
+            onClose={() => {
+              setSelectedNodeForRelationships(null);
+              setClickedNode(null);
+            }}
+            onNodeSelect={(nodeId) => {
+              // Find and focus on the selected node
+              const targetNode = nodes.find((n) => n.id === nodeId);
+              if (targetNode) {
+                focusOnNode(nodeId);
+                setClickedNode(nodeId);
+                setSelectedNodeForRelationships(targetNode);
+              }
+            }}
+          />
+        </>
+      )}
     </div>
   );
 };
