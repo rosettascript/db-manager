@@ -39,6 +39,16 @@ lerna-debug.log*
 .env.local
 .env.*.local
 
-# Database files (connections stored here)
+# Database files - sensitive data (connections, query history, saved queries)
+# All data files should be ignored, only .gitkeep files are tracked
 /database/connections.json
+/database/connections.json.backup.*
+/database/query-history/*.json
+/database/saved-queries/*.json
+/database/query-snippets/*.json
+# Keep .gitkeep files
+!/database/.gitkeep
+!/database/query-history/.gitkeep
+!/database/saved-queries/.gitkeep
+!/database/query-snippets/.gitkeep
 
