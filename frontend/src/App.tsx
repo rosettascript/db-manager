@@ -1,3 +1,4 @@
+import { Suspense, lazy } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -10,14 +11,16 @@ import { MainLayout } from "@/components/layout/MainLayout";
 import { ThemeProvider } from "@/components/theme";
 import { CommandPalette } from "@/components/keyboard";
 import { SettingsShortcut } from "@/components/keyboard/SettingsShortcut";
-import Index from "./pages/Index";
-import TableViewer from "./pages/TableViewer";
-import ERDiagram from "./pages/ERDiagram";
-import QueryBuilder from "./pages/QueryBuilder";
-import IndexRecommendations from "./pages/IndexRecommendations";
-import NotFound from "./pages/NotFound";
 import { logError } from "@/lib/api/errors";
 import { queryConfig } from "@/lib/query/queryConfig";
+
+// Lazy load pages for code splitting
+const Index = lazy(() => import("./pages/Index"));
+const TableViewer = lazy(() => import("./pages/TableViewer"));
+const ERDiagram = lazy(() => import("./pages/ERDiagram"));
+const QueryBuilder = lazy(() => import("./pages/QueryBuilder"));
+const IndexRecommendations = lazy(() => import("./pages/IndexRecommendations"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -36,12 +39,21 @@ const queryClient = new QueryClient({
   },
 });
 
+// Loading fallback component
+const PageLoader = () => (
+  <div className="flex items-center justify-center h-screen">
+    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+  </div>
+);
+
 // Wrapper component to force remount when tableId changes
 const TableRouteWrapper = () => {
   const { tableId } = useParams();
   return (
     <MainLayout>
-      <TableViewer key={tableId} />
+      <Suspense fallback={<PageLoader />}>
+        <TableViewer key={tableId} />
+      </Suspense>
     </MainLayout>
   );
 };
@@ -68,7 +80,14 @@ const App = () => (
               <CommandPalette />
               <SettingsShortcut />
             <Routes>
-              <Route path="/" element={<Index />} />
+              <Route 
+                path="/" 
+                element={
+                  <Suspense fallback={<PageLoader />}>
+                    <Index />
+                  </Suspense>
+                } 
+              />
               <Route
                 path="/table/:tableId"
                 element={<TableRouteWrapper />}
@@ -77,7 +96,9 @@ const App = () => (
                 path="/diagram"
                 element={
                   <MainLayout>
-                    <ERDiagram />
+                    <Suspense fallback={<PageLoader />}>
+                      <ERDiagram />
+                    </Suspense>
                   </MainLayout>
                 }
               />
@@ -85,7 +106,9 @@ const App = () => (
                 path="/query"
                 element={
                   <MainLayout>
-                    <QueryBuilder />
+                    <Suspense fallback={<PageLoader />}>
+                      <QueryBuilder />
+                    </Suspense>
                   </MainLayout>
                 }
               />
@@ -93,12 +116,21 @@ const App = () => (
                 path="/indexes"
                 element={
                   <MainLayout>
-                    <IndexRecommendations />
+                    <Suspense fallback={<PageLoader />}>
+                      <IndexRecommendations />
+                    </Suspense>
                   </MainLayout>
                 }
               />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route path="*" element={<NotFound />} />
+              <Route 
+                path="*" 
+                element={
+                  <Suspense fallback={<PageLoader />}>
+                    <NotFound />
+                  </Suspense>
+                } 
+              />
             </Routes>
             </BrowserRouter>
           </TooltipProvider>

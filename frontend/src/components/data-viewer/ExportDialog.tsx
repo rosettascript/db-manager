@@ -56,7 +56,7 @@ export const ExportDialog = (props: ExportDialogProps) => {
     const formatLabel = format === "csv" ? "CSV" : "JSON";
     
     try {
-      const { exportService } = await import("@/lib/api");
+      const { exportService } = await import("@/lib/api/services/export.service");
       
       if (isTable) {
         const options: TableExportOptions = {

@@ -163,10 +163,14 @@ All colors MUST be HSL.
 
   /* React Flow custom styles */
   .react-flow__node {
-    cursor: grab;
+    cursor: default;
   }
 
-  .react-flow__node.selected {
+  .react-flow__node:hover {
+    cursor: pointer;
+  }
+
+  .react-flow__node:active {
     cursor: grabbing;
   }
 

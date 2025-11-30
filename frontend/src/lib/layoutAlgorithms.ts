@@ -1,7 +1,25 @@
 import { Node, Edge } from "reactflow";
-import ELK, { ElkNode } from "elkjs/lib/elk.bundled.js";
+import type { ElkNode } from "elkjs";
 
-const elk = new ELK();
+// Lazy load ELK.js only when hierarchical layout is needed
+let elkInstance: any = null;
+let elkPromise: Promise<any> | null = null;
+
+const getELK = async () => {
+  if (elkInstance) {
+    return elkInstance;
+  }
+  
+  if (!elkPromise) {
+    elkPromise = (async () => {
+      const ELK = (await import("elkjs/lib/elk.bundled.js")).default;
+      elkInstance = new ELK();
+      return elkInstance;
+    })();
+  }
+  
+  return elkPromise;
+};
 
 export type LayoutAlgorithm = "force" | "hierarchical" | "circular" | "grid";
 
@@ -75,6 +93,7 @@ export const hierarchicalLayout = async (
   };
 
   try {
+    const elk = await getELK();
     const layout = await elk.layout(graph);
 
     return nodes.map((node) => {

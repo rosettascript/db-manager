@@ -61,6 +61,8 @@ const FullscreenDiagramView = ({
   edges,
   onNodeMouseEnter,
   onNodeMouseLeave,
+  onNodeClick,
+  onPaneClick,
   expanded,
   fitTrigger,
 }: {
@@ -68,6 +70,8 @@ const FullscreenDiagramView = ({
   edges: Edge[];
   onNodeMouseEnter: (event: React.MouseEvent, node: Node) => void;
   onNodeMouseLeave: () => void;
+  onNodeClick: (event: React.MouseEvent, node: Node) => void;
+  onPaneClick: () => void;
   expanded: boolean;
   fitTrigger: number;
 }) => {
@@ -99,6 +103,8 @@ const FullscreenDiagramView = ({
       onEdgesChange={onFullscreenEdgesChange}
       onNodeMouseEnter={onNodeMouseEnter}
       onNodeMouseLeave={onNodeMouseLeave}
+      onNodeClick={onNodeClick}
+      onPaneClick={onPaneClick}
       nodeTypes={nodeTypes}
       connectionLineType={ConnectionLineType.SmoothStep}
       fitView
@@ -151,7 +157,9 @@ const ERDiagramContent = () => {
   const [showIsolatedTables, setShowIsolatedTables] = useState(true);
   const [selectedSchemas, setSelectedSchemas] = useState<string[]>([]);
   const [currentLayout, setCurrentLayout] = useState<LayoutAlgorithm>("grid");
+  const [hasExplicitLayout, setHasExplicitLayout] = useState(false);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
+  const [clickedNode, setClickedNode] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -402,9 +410,43 @@ const ERDiagramContent = () => {
     return () => clearTimeout(timeoutId);
   }, [nodes, storageKey, savePositions]);
 
-  // Update highlighted state based on hover
-  const updateHighlightedNodes = useCallback((nodeId: string | null) => {
-    if (!nodeId) {
+  const onNodeMouseEnter = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      setHoveredNode(node.id);
+      // Effect will handle highlighting (click takes priority over hover)
+    },
+    []
+  );
+
+  const onNodeMouseLeave = useCallback(() => {
+    setHoveredNode(null);
+    // Effect will handle highlighting (click takes priority over hover)
+  }, []);
+
+  const onNodeClick = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      // Toggle selection: if clicking the same node, deselect it; otherwise select the new node
+      if (clickedNode === node.id) {
+        setClickedNode(null);
+      } else {
+        setClickedNode(node.id);
+      }
+      // Effect will handle highlighting
+    },
+    [clickedNode]
+  );
+
+  const onPaneClick = useCallback(() => {
+    // Clicking on empty space deselects the clicked node
+    setClickedNode(null);
+  }, []);
+
+  // Update highlights when clickedNode or hoveredNode changes
+  useEffect(() => {
+    // Click takes priority over hover
+    const activeNodeId = clickedNode || hoveredNode;
+    
+    if (!activeNodeId) {
       setNodes((nds) =>
         nds.map((node) => ({
           ...node,
@@ -422,15 +464,15 @@ const ERDiagramContent = () => {
     }
 
     // Find connected nodes
-    const connectedNodes = new Set<string>([nodeId]);
+    const connectedNodes = new Set<string>([activeNodeId]);
     const connectedEdges = new Set<string>();
     
     edges.forEach((edge) => {
-      if (edge.source === nodeId) {
+      if (edge.source === activeNodeId) {
         connectedNodes.add(edge.target);
         connectedEdges.add(edge.id);
       }
-      if (edge.target === nodeId) {
+      if (edge.target === activeNodeId) {
         connectedNodes.add(edge.source);
         connectedEdges.add(edge.id);
       }
@@ -466,24 +508,12 @@ const ERDiagramContent = () => {
         },
       }))
     );
-  }, [edges, setNodes, setEdges]);
-
-  const onNodeMouseEnter = useCallback(
-    (_: React.MouseEvent, node: Node) => {
-      setHoveredNode(node.id);
-      updateHighlightedNodes(node.id);
-    },
-    [updateHighlightedNodes]
-  );
-
-  const onNodeMouseLeave = useCallback(() => {
-    setHoveredNode(null);
-    updateHighlightedNodes(null);
-  }, [updateHighlightedNodes]);
+  }, [clickedNode, hoveredNode, edges, setNodes, setEdges]);
 
   const handleAutoLayout = useCallback(
     async (algorithm: LayoutAlgorithm) => {
       setCurrentLayout(algorithm);
+      setHasExplicitLayout(true);
       // Pass expanded state to layout algorithms so they can adjust spacing
       const layoutedNodes = await applyLayout(algorithm, nodes, edges, nodesExpanded);
       setNodes(layoutedNodes);
@@ -1238,8 +1268,9 @@ const ERDiagramContent = () => {
                   },
                 }));
                 
-                // Auto-reapply current layout with new expanded state to prevent overlaps
-                if (updatedNodes.length > 0 && currentLayout) {
+                // Only reapply layout if one was explicitly applied (not just the default)
+                // This prevents resetting to grid when user has manually positioned nodes
+                if (updatedNodes.length > 0 && hasExplicitLayout && currentLayout) {
                   try {
                     const layoutedNodes = await applyLayout(currentLayout, updatedNodes, edges, newExpandedState);
                     setNodes(layoutedNodes);
@@ -1253,7 +1284,8 @@ const ERDiagramContent = () => {
                     setNodes(updatedNodes);
                   }
                 } else {
-                  // If no layout, just update nodes with expanded state
+                  // If no explicit layout was applied, just update nodes with expanded state
+                  // This preserves manual positioning or default layout
                   setNodes(updatedNodes);
                 }
                 
@@ -1376,6 +1408,8 @@ const ERDiagramContent = () => {
             onEdgesChange={onEdgesChange}
             onNodeMouseEnter={onNodeMouseEnter}
             onNodeMouseLeave={onNodeMouseLeave}
+            onNodeClick={onNodeClick}
+            onPaneClick={onPaneClick}
             nodeTypes={memoizedNodeTypes}
             connectionLineType={ConnectionLineType.SmoothStep}
             fitView
@@ -1464,6 +1498,8 @@ const ERDiagramContent = () => {
                 edges={visibleEdges}
                 onNodeMouseEnter={onNodeMouseEnter}
                 onNodeMouseLeave={onNodeMouseLeave}
+                onNodeClick={onNodeClick}
+                onPaneClick={onPaneClick}
                 expanded={nodesExpanded}
                 fitTrigger={fullscreenFitTrigger}
               />

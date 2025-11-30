@@ -29,10 +29,11 @@ const FlowTableNodeComponent = ({ data, selected }: NodeProps<TableNodeData>) =>
           "w-80 shadow-lg transition-all duration-200",
           selected && "ring-2 ring-primary ring-offset-2 shadow-2xl",
           isHighlighted && "ring-2 ring-accent ring-offset-2 shadow-xl",
-          "hover:shadow-xl"
+          "hover:shadow-xl",
+          "hover:cursor-pointer active:cursor-grabbing"
         )}
       >
-        <CardHeader className="pb-3 bg-primary/5 border-b border-border cursor-grab active:cursor-grabbing">
+        <CardHeader className="pb-3 bg-primary/5 border-b border-border">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <GripVertical className="w-4 h-4 text-muted-foreground" />
