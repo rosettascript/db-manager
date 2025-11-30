@@ -1,4 +1,4 @@
-import { Database, ChevronDown, Settings } from "lucide-react";
+import { Database, ChevronDown, Settings, Search } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -13,11 +13,30 @@ import { ThemeToggle } from "@/components/theme";
 import { KeyboardShortcutsDialog } from "@/components/keyboard";
 import { Keyboard } from "lucide-react";
 import { useSettings } from "@/contexts/SettingsContext";
+import { GlobalSearch } from "@/components/search/GlobalSearch";
+import { useKeyboardShortcut } from "@/hooks/useKeyboardShortcut";
 
 export const Header = () => {
   const { activeConnection, setActiveConnection, connections } = useConnection();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
   const { open: openSettings } = useSettings();
+
+  // Global search shortcut (Ctrl+Shift+F or Cmd+Shift+F)
+  useKeyboardShortcut(
+    'f',
+    () => {
+      setSearchOpen(true);
+    },
+    { ctrl: true, shift: true }
+  );
+  useKeyboardShortcut(
+    'f',
+    () => {
+      setSearchOpen(true);
+    },
+    { meta: true, shift: true }
+  );
 
   return (
     <>
@@ -31,6 +50,16 @@ export const Header = () => {
       </div>
 
       <div className="flex items-center gap-3">
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => setSearchOpen(true)}
+          title="Global Search (Ctrl+Shift+F)"
+        >
+          <Search className="w-4 h-4" />
+        </Button>
+        <GlobalSearch open={searchOpen} onOpenChange={setSearchOpen} />
+        
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" className="gap-2 min-w-[200px] justify-between" disabled={!activeConnection}>

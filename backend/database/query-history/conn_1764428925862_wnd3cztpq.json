@@ -1,6 +1,51 @@
 [
   {
     "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "rollback\n",
+    "timestamp": "2025-11-30T04:41:23.655Z",
+    "executionTime": 1,
+    "rowsAffected": 0,
+    "success": true,
+    "id": "q_1764477683655_juntoa5a0"
+  },
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "delete from users where email = 'john@example.com'\n",
+    "timestamp": "2025-11-30T04:41:04.358Z",
+    "executionTime": 8,
+    "rowsAffected": 1,
+    "success": true,
+    "id": "q_1764477664358_cvnrgf4nu"
+  },
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "begin\n",
+    "timestamp": "2025-11-30T04:40:26.796Z",
+    "executionTime": 14,
+    "rowsAffected": 0,
+    "success": true,
+    "id": "q_1764477626796_6hahqk8uq"
+  },
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "select * from users;\n",
+    "timestamp": "2025-11-30T04:35:08.014Z",
+    "executionTime": 14,
+    "rowCount": 1,
+    "success": true,
+    "id": "q_1764477308014_m98yw9dv2"
+  },
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
+    "query": "select * from logs;\n",
+    "timestamp": "2025-11-30T04:34:57.040Z",
+    "executionTime": 1,
+    "rowCount": 0,
+    "success": true,
+    "id": "q_1764477297040_tvo8zp3i6"
+  },
+  {
+    "connectionId": "conn_1764428925862_wnd3cztpq",
     "query": "CREATE TABLE fake (\n    id CHAR(36) PRIMARY KEY,\n    name VARCHAR(255)\n);\n",
     "timestamp": "2025-11-29T19:50:14.302Z",
     "executionTime": 24,

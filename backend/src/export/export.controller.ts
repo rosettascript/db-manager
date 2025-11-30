@@ -115,5 +115,39 @@ export class ExportController {
       dto.selectedColumns,
     );
   }
+
+  /**
+   * Export full database dump (schema + data)
+   * GET /api/connections/:connectionId/export/database-dump
+   */
+  @Get('export/database-dump')
+  async exportFullDatabaseDump(
+    @Param('connectionId') connectionId: string,
+    @Res() res: Response,
+    @Query('schemas') schemas?: string,
+    @Query('includeData', new DefaultValuePipe(true), ParseBoolPipe) includeData?: boolean,
+  ): Promise<void> {
+    const schemaList = schemas ? schemas.split(',').map((s) => s.trim()) : undefined;
+    await this.exportService.exportFullDatabaseDump(connectionId, res, {
+      schemas: schemaList,
+      includeData,
+    });
+  }
+
+  /**
+   * Export schema-only (no data)
+   * GET /api/connections/:connectionId/export/schema-only
+   */
+  @Get('export/schema-only')
+  async exportSchemaOnly(
+    @Param('connectionId') connectionId: string,
+    @Res() res: Response,
+    @Query('schemas') schemas?: string,
+  ): Promise<void> {
+    const schemaList = schemas ? schemas.split(',').map((s) => s.trim()) : undefined;
+    await this.exportService.exportSchemaOnly(connectionId, res, {
+      schemas: schemaList,
+    });
+  }
 }
 

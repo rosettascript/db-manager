@@ -1,6 +1,24 @@
 [
   {
     "connectionId": "conn_1764411486622_47gcqi4k8",
+    "query": "CREATE INDEX \"idx_gis_barangay_name\" ON \"public\".\"gis_barangay\" (\"name\");",
+    "timestamp": "2025-11-30T12:33:38.074Z",
+    "executionTime": 12,
+    "rowsAffected": 0,
+    "success": true,
+    "id": "q_1764506018074_t0xdxv0g2"
+  },
+  {
+    "connectionId": "conn_1764411486622_47gcqi4k8",
+    "query": "select * from bets\n",
+    "timestamp": "2025-11-30T04:31:00.126Z",
+    "executionTime": 15,
+    "success": false,
+    "error": "relation \"bets\" does not exist",
+    "id": "q_1764477060126_t5l61gv7t"
+  },
+  {
+    "connectionId": "conn_1764411486622_47gcqi4k8",
     "query": "select * from gis_barangay where name = :name",
     "timestamp": "2025-11-29T19:59:06.000Z",
     "executionTime": 29,

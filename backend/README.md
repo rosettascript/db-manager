@@ -2,51 +2,17 @@
 
 Backend API for PostgreSQL Database Visualizer built with NestJS and TypeScript.
 
-## 🚀 Getting Started
+## 🚀 Quick Start
 
-### Prerequisites
+For complete setup instructions, see [_docs/SETUP_GUIDE.md](../_docs/SETUP_GUIDE.md).
 
-- Node.js (v18 or higher)
-- npm or yarn
-- PostgreSQL database (for testing connections)
-
-### Installation
-
-1. Install dependencies:
+**Quick commands:**
 ```bash
 npm install
-```
-
-2. Create a `.env` file in the backend directory (copy from `.env.example`):
-```bash
-cp .env.example .env
-```
-
-3. Update the `.env` file with your configuration:
-```env
-PORT=3000
-NODE_ENV=development
-FRONTEND_URL=http://localhost:5173
-ENCRYPTION_KEY=your-secure-encryption-key-here
-CONNECTIONS_FILE_PATH=./database/connections.json
-```
-
-### Running the Application
-
-```bash
-# Development mode (with hot reload)
+cp env.template .env
+# Edit .env with your configuration (see _docs/SETUP_GUIDE.md)
 npm run start:dev
-
-# Production mode
-npm run start:prod
-
-# Debug mode
-npm run start:debug
 ```
-
-The server will start on `http://localhost:3000` (or the port specified in `.env`).
-
-### API Endpoint
 
 The API is available at: `http://localhost:3000/api`
 
@@ -95,19 +61,10 @@ backend/
 ## 📝 Documentation
 
 ### Core Documentation
-- **[API_DOCUMENTATION.md](./API_DOCUMENTATION.md)** - Complete API reference with all 32 endpoints
-- **[ARCHITECTURE.md](./ARCHITECTURE.md)** - System architecture and design patterns
-- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Deployment guide for production
+- **[_docs/API_DOCUMENTATION.md](./_docs/API_DOCUMENTATION.md)** - Complete API reference with all 32 endpoints
+- **[_docs/ARCHITECTURE.md](./_docs/ARCHITECTURE.md)** - System architecture and design patterns
+- **[_docs/DEPLOYMENT.md](./_docs/DEPLOYMENT.md)** - Deployment guide for production
 
-### Quick Reference
-- **[BACKEND_START_HERE.md](../BACKEND_START_HERE.md)** - Quick start guide
-- **[IMPLEMENTATION_CHECKLIST.md](../IMPLEMENTATION_CHECKLIST.md)** - Detailed implementation checklist
-- **[PROGRESS_TRACKER.md](../PROGRESS_TRACKER.md)** - Progress tracking
-
-### Phase Documentation
-- Phase 1-10 implementation and test results
-- Integration test scripts
-- Test results and summaries
 
 ## 🔒 Security
 

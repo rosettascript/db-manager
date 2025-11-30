@@ -195,6 +195,13 @@ export const keyboardShortcuts: KeyboardShortcut[] = [
     description: 'Quick open/search',
     category: 'navigation',
   },
+  {
+    id: 'global-search',
+    key: 'f',
+    modifiers: { ctrl: true, shift: true },
+    description: 'Open global search',
+    category: 'navigation',
+  },
 
   // Table Viewer Shortcuts
   {

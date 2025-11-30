@@ -14,9 +14,7 @@ import Index from "./pages/Index";
 import TableViewer from "./pages/TableViewer";
 import ERDiagram from "./pages/ERDiagram";
 import QueryBuilder from "./pages/QueryBuilder";
-import ApiTest from "./pages/ApiTest";
-import StateManagementTest from "./pages/StateManagementTest";
-import UIUXTest from "./pages/UIUXTest";
+import IndexRecommendations from "./pages/IndexRecommendations";
 import NotFound from "./pages/NotFound";
 import { logError } from "@/lib/api/errors";
 import { queryConfig } from "@/lib/query/queryConfig";
@@ -91,9 +89,14 @@ const App = () => (
                   </MainLayout>
                 }
               />
-              <Route path="/api-test" element={<ApiTest />} />
-              <Route path="/state-test" element={<StateManagementTest />} />
-              <Route path="/ui-ux-test" element={<UIUXTest />} />
+              <Route
+                path="/indexes"
+                element={
+                  <MainLayout>
+                    <IndexRecommendations />
+                  </MainLayout>
+                }
+              />
               {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
               <Route path="*" element={<NotFound />} />
             </Routes>

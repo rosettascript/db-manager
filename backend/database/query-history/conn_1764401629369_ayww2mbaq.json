@@ -1,1 +1,11 @@
-[]
+[
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "select * from bets\n",
+    "timestamp": "2025-11-30T04:31:20.317Z",
+    "executionTime": 1,
+    "rowCount": 14,
+    "success": true,
+    "id": "q_1764477080317_3fdgq8030"
+  }
+]

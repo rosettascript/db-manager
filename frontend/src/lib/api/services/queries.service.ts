@@ -10,6 +10,8 @@ import type {
   QueryExecutionResponse,
   ExplainQueryDto,
   ExplainPlanResponse,
+  QueryValidationResult,
+  QueryOptimizationResult,
 } from '../types';
 
 export const queriesService = {
@@ -52,6 +54,35 @@ export const queriesService = {
     return apiClient.post<{ success: boolean; message: string }>(
       `connections/${connectionId}/query/cancel`,
       { queryId },
+    );
+  },
+
+  /**
+   * Validate query syntax
+   * POST /api/connections/:connectionId/query/validate
+   */
+  async validateQuery(
+    connectionId: string,
+    query: string,
+  ): Promise<QueryValidationResult> {
+    return apiClient.post<QueryValidationResult>(
+      `connections/${connectionId}/query/validate`,
+      { query },
+    );
+  },
+
+  /**
+   * Optimize query and get recommendations
+   * POST /api/connections/:connectionId/query/optimize
+   */
+  async optimizeQuery(
+    connectionId: string,
+    query: string,
+    analyze: boolean = false,
+  ): Promise<QueryOptimizationResult> {
+    return apiClient.post<QueryOptimizationResult>(
+      `connections/${connectionId}/query/optimize`,
+      { query, analyze },
     );
   },
 };

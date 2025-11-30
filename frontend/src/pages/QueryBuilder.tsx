@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { Play, Save, Download, Trash2, Code2, History, BookMarked, X, Loader2, BarChart3 } from "lucide-react";
+import { Play, Save, Download, Trash2, Code2, History, BookMarked, X, Loader2, BarChart3, CheckCircle2, Zap, FileCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -18,6 +18,9 @@ import { SavedQueries } from "@/components/query/SavedQueries";
 import { QueryHistory } from "@/components/query/QueryHistory";
 import { ExportDialog } from "@/components/data-viewer/ExportDialog";
 import { ParameterForm } from "@/components/query/ParameterForm";
+import { QueryValidationPanel } from "@/components/query/QueryValidationPanel";
+import { QueryOptimizationPanel } from "@/components/query/QueryOptimizationPanel";
+import { QuerySnippetsPanel } from "@/components/query-snippets/QuerySnippetsPanel";
 import { parseSQLParameters } from "@/lib/sql/parameterParser";
 import {
   Dialog,
@@ -72,6 +75,7 @@ const QueryBuilder = () => {
   const [chartData, setChartData] = useState<ChartDataResponse | null>(null);
   const [chartOptions, setChartOptions] = useState<ChartOptions | null>(null);
   const [isGeneratingChart, setIsGeneratingChart] = useState(false);
+  const [showSnippets, setShowSnippets] = useState(false);
 
   // Save query to localStorage whenever it changes
   useEffect(() => {
@@ -449,6 +453,15 @@ const QueryBuilder = () => {
             </p>
           </div>
           <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => setShowSnippets(!showSnippets)}
+            >
+              <FileCode className="w-4 h-4" />
+              Snippets
+            </Button>
             <SavedQueries connectionId={activeConnection?.id || null} onLoadQuery={setQuery} />
             <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
               <ShortcutTooltip shortcut="Ctrl+S" description="Save query">
@@ -598,6 +611,14 @@ const QueryBuilder = () => {
                 <TabsTrigger value="history" className="gap-2">
                   <History className="w-3 h-3" />
                   History ({queryHistory.length})
+                </TabsTrigger>
+                <TabsTrigger value="validation" className="gap-2">
+                  <CheckCircle2 className="w-3 h-3" />
+                  Validation
+                </TabsTrigger>
+                <TabsTrigger value="optimization" className="gap-2">
+                  <Zap className="w-3 h-3" />
+                  Optimization
                 </TabsTrigger>
               </TabsList>
             </div>
@@ -829,10 +850,42 @@ const QueryBuilder = () => {
                   />
                 )}
               </TabsContent>
+
+              <TabsContent value="validation" className="mt-0 p-6">
+                <QueryValidationPanel query={query} />
+              </TabsContent>
+
+              <TabsContent value="optimization" className="mt-0 p-6">
+                <QueryOptimizationPanel query={query} />
+              </TabsContent>
             </div>
           </Tabs>
         </div>
       </div>
+
+      {/* Query Snippets Side Panel */}
+      {showSnippets && (
+        <div className="fixed right-0 top-0 h-full w-80 border-l border-border bg-background z-50 shadow-lg">
+          <div className="h-full flex flex-col">
+            <div className="p-4 border-b flex items-center justify-between">
+              <h2 className="font-semibold">Query Snippets</h2>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowSnippets(false)}
+              >
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+            <QuerySnippetsPanel
+              onInsertSnippet={(snippet) => {
+                setQuery(snippet);
+                setShowSnippets(false);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };

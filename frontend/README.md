@@ -4,21 +4,12 @@ React frontend for the DB Visualizer application - a PostgreSQL database visuali
 
 ## 🚀 Quick Start
 
-### Prerequisites
+For complete setup instructions, see [_docs/SETUP_GUIDE.md](../_docs/SETUP_GUIDE.md).
 
-- Node.js 18+ and npm
-- Backend server running (see [SETUP_GUIDE.md](../SETUP_GUIDE.md))
-
-### Installation
-
+**Quick commands:**
 ```bash
-# Install dependencies
 npm install
-
-# Create .env file (optional)
-echo "VITE_API_URL=http://localhost:3000/api" > .env
-
-# Start development server
+echo "VITE_API_URL=http://localhost:3000/api" > .env  # Optional
 npm run dev
 ```
 
@@ -28,15 +19,11 @@ The frontend will run on `http://localhost:8080` or `http://localhost:5173`
 
 ### Integration Documentation
 
-- **[FRONTEND_INTEGRATION_README.md](../FRONTEND_INTEGRATION_README.md)** - Complete integration guide
-- **[SETUP_GUIDE.md](../SETUP_GUIDE.md)** - Setup instructions
-- **[API_SERVICE_DOCUMENTATION.md](../API_SERVICE_DOCUMENTATION.md)** - API service reference
-- **[STATE_MANAGEMENT_DOCUMENTATION.md](../STATE_MANAGEMENT_DOCUMENTATION.md)** - State management guide
+- **[_docs/FRONTEND_INTEGRATION_README.md](../_docs/FRONTEND_INTEGRATION_README.md)** - Complete integration guide
+- **[_docs/SETUP_GUIDE.md](../_docs/SETUP_GUIDE.md)** - Setup instructions
+- **[_docs/API_SERVICE_DOCUMENTATION.md](../_docs/API_SERVICE_DOCUMENTATION.md)** - API service reference
+- **[_docs/STATE_MANAGEMENT_DOCUMENTATION.md](../_docs/STATE_MANAGEMENT_DOCUMENTATION.md)** - State management guide
 
-### Testing Documentation
-
-- **[TEST_PHASE12_12.md](../TEST_PHASE12_12.md)** - Comprehensive testing guide
-- **[INTEGRATION_TEST_CHECKLIST.md](../INTEGRATION_TEST_CHECKLIST.md)** - Quick test checklist
 
 ## 🛠️ Technologies
 
@@ -62,9 +49,6 @@ npm run preview         # Preview production build
 
 # Code Quality
 npm run lint            # Run ESLint
-
-# Testing
-npm run test:state-management  # Run state management tests
 ```
 
 ## ⚙️ Configuration
@@ -125,7 +109,7 @@ The frontend communicates with the NestJS backend through a centralized API clie
 - `exportService` - Data export
 - `foreignKeysService` - Foreign key navigation
 
-See [API_SERVICE_DOCUMENTATION.md](../API_SERVICE_DOCUMENTATION.md) for complete API reference.
+See [_docs/API_SERVICE_DOCUMENTATION.md](../_docs/API_SERVICE_DOCUMENTATION.md) for complete API reference.
 
 ## 🔄 State Management
 
@@ -136,26 +120,7 @@ The application uses React Query for server state management:
 - **Cache Management:** Utilities in `lib/query/cacheUtils.ts`
 - **Connection Context:** Global state in `contexts/ConnectionContext.tsx`
 
-See [STATE_MANAGEMENT_DOCUMENTATION.md](../STATE_MANAGEMENT_DOCUMENTATION.md) for detailed guide.
-
-## 🧪 Testing
-
-### Test Pages
-
-Interactive test pages available:
-- `/api-test` - API foundation tests
-- `/state-test` - State management tests
-- `/ui-ux-test` - UI/UX tests
-
-### Running Tests
-
-```bash
-# Automated state management tests
-npm run test:state-management
-
-# Or use test pages in browser
-# Navigate to http://localhost:8080/[test-page]
-```
+See [_docs/STATE_MANAGEMENT_DOCUMENTATION.md](../_docs/STATE_MANAGEMENT_DOCUMENTATION.md) for detailed guide.
 
 ## 🐛 Troubleshooting
 
@@ -177,7 +142,7 @@ rm -rf node_modules package-lock.json
 npm install
 ```
 
-See [SETUP_GUIDE.md](../SETUP_GUIDE.md) for more troubleshooting tips.
+See [_docs/SETUP_GUIDE.md](../_docs/SETUP_GUIDE.md) for more troubleshooting tips.
 
 ## 📝 License
 
@@ -185,4 +150,4 @@ MIT
 
 ---
 
-**For complete setup instructions, see [SETUP_GUIDE.md](../SETUP_GUIDE.md)**
+**For complete setup instructions, see [_docs/SETUP_GUIDE.md](../_docs/SETUP_GUIDE.md)**

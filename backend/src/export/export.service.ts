@@ -396,5 +396,159 @@ export class ExportService {
 
     return str;
   }
+
+  /**
+   * Export full database dump (schema + data)
+   */
+  async exportFullDatabaseDump(
+    connectionId: string,
+    res: Response,
+    options: {
+      schemas?: string[];
+      includeData?: boolean;
+    } = {},
+  ): Promise<void> {
+    const pool = this.connectionManager.getPool(connectionId);
+    if (!pool) {
+      throw new NotFoundException(
+        `Connection ${connectionId} not found or not connected`,
+      );
+    }
+
+    try {
+      const includeData = options.includeData !== false;
+      const schemas = options.schemas || [];
+
+      // Get all schemas if not specified
+      let schemaList: string[] = schemas;
+      if (schemaList.length === 0) {
+        const schemasResult = await pool.query(`
+          SELECT schema_name 
+          FROM information_schema.schemata 
+          WHERE schema_name NOT IN ('information_schema', 'pg_catalog', 'pg_toast')
+          ORDER BY schema_name;
+        `);
+        schemaList = schemasResult.rows.map((row) => row.schema_name);
+      }
+
+      res.setHeader('Content-Type', 'application/sql; charset=utf-8');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="database_dump_${Date.now()}.sql"`,
+      );
+      res.setHeader('Cache-Control', 'no-cache');
+
+      // Write header
+      res.write('-- Database Dump\n');
+      res.write(`-- Generated: ${new Date().toISOString()}\n`);
+      res.write(`-- Schemas: ${schemaList.join(', ')}\n\n`);
+
+      // Export schema for each schema
+      for (const schema of schemaList) {
+        res.write(`\n-- Schema: ${schema}\n`);
+        res.write(`CREATE SCHEMA IF NOT EXISTS "${schema}";\n\n`);
+
+        // Get all tables in schema
+        const tablesResult = await pool.query(
+          `
+          SELECT table_name
+          FROM information_schema.tables
+          WHERE table_schema = $1
+            AND table_type = 'BASE TABLE'
+          ORDER BY table_name;
+        `,
+          [schema],
+        );
+
+        for (const tableRow of tablesResult.rows) {
+          const tableName = tableRow.table_name;
+
+          // Get CREATE TABLE statement
+          const createTableResult = await pool.query(
+            `
+            SELECT 
+              'CREATE TABLE ' || quote_ident($1) || '.' || quote_ident($2) || ' (' || 
+              string_agg(
+                quote_ident(column_name) || ' ' || 
+                CASE 
+                  WHEN data_type = 'ARRAY' THEN udt_name
+                  ELSE data_type || 
+                    CASE 
+                      WHEN character_maximum_length IS NOT NULL 
+                      THEN '(' || character_maximum_length || ')'
+                      WHEN numeric_precision IS NOT NULL 
+                      THEN '(' || numeric_precision || 
+                        CASE WHEN numeric_scale IS NOT NULL 
+                        THEN ',' || numeric_scale ELSE '' END || ')'
+                      ELSE ''
+                    END
+                END ||
+                CASE WHEN is_nullable = 'NO' THEN ' NOT NULL' ELSE '' END ||
+                CASE WHEN column_default IS NOT NULL 
+                THEN ' DEFAULT ' || column_default ELSE '' END,
+                ', '
+              ) || ');' as create_statement
+            FROM information_schema.columns
+            WHERE table_schema = $1 AND table_name = $2
+            ORDER BY ordinal_position;
+          `,
+            [schema, tableName],
+          );
+
+          if (createTableResult.rows[0]?.create_statement) {
+            res.write(`\n-- Table: ${schema}.${tableName}\n`);
+            res.write(createTableResult.rows[0].create_statement + '\n');
+
+            // Export data if requested
+            if (includeData) {
+              const dataResult = await pool.query(
+                `SELECT * FROM "${schema}"."${tableName}"`,
+              );
+
+              if (dataResult.rows.length > 0) {
+                const columns = dataResult.fields.map((f) => f.name);
+                res.write(`\n-- Data for ${schema}.${tableName}\n`);
+
+                for (const row of dataResult.rows) {
+                  const values = columns.map((col) => {
+                    const value = row[col];
+                    if (value === null) return 'NULL';
+                    if (typeof value === 'string') {
+                      return `'${value.replace(/'/g, "''")}'`;
+                    }
+                    return String(value);
+                  });
+                  res.write(
+                    `INSERT INTO "${schema}"."${tableName}" (${columns.map((c) => `"${c}"`).join(', ')}) VALUES (${values.join(', ')});\n`,
+                  );
+                }
+              }
+            }
+          }
+        }
+      }
+
+      res.end();
+    } catch (error: any) {
+      this.logger.error(`Failed to export database dump: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Export schema-only (no data)
+   */
+  async exportSchemaOnly(
+    connectionId: string,
+    res: Response,
+    options: {
+      schemas?: string[];
+    } = {},
+  ): Promise<void> {
+    return this.exportFullDatabaseDump(connectionId, res, {
+      ...options,
+      includeData: false,
+    });
+  }
 }
 

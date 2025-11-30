@@ -12,6 +12,11 @@ import { ConnectionManagerService } from '../common/database/connection-manager.
 import {
   QueryExecutionResponse,
   ExplainPlanResponse,
+  QueryValidationResult,
+  QueryValidationError,
+  QueryValidationWarning,
+  QueryOptimizationResult,
+  OptimizationRecommendation,
 } from './interfaces/query.interface';
 import { ExecuteQueryDto } from './dto/execute-query.dto';
 import { QueryHistoryService } from '../query-history/query-history.service';
@@ -318,6 +323,16 @@ export class QueriesService {
       );
     }
 
+    // Check if query is explainable (EXPLAIN only works with DML statements)
+    const queryType = this.getQueryType(query);
+    const explainableTypes = ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'WITH'];
+    
+    if (!explainableTypes.includes(queryType)) {
+      throw new BadRequestException(
+        `Cannot generate explain plan for ${queryType} statements. EXPLAIN only works with SELECT, INSERT, UPDATE, DELETE, and WITH queries.`,
+      );
+    }
+
     // Get connection pool
     const pool = this.connectionManager.getPool(connectionId);
     if (!pool) {
@@ -464,6 +479,266 @@ export class QueriesService {
    */
   getRunningQueries(connectionId: string): string[] {
     return Array.from(this.runningQueries.keys());
+  }
+
+  /**
+   * Validate query syntax
+   */
+  async validateQuery(
+    connectionId: string,
+    query: string,
+  ): Promise<QueryValidationResult> {
+    const pool = this.connectionManager.getPool(connectionId);
+    if (!pool) {
+      throw new NotFoundException(
+        `Connection ${connectionId} not found or not connected`,
+      );
+    }
+
+    const errors: QueryValidationError[] = [];
+    const warnings: QueryValidationWarning[] = [];
+    const suggestions: string[] = [];
+
+    try {
+      // Basic syntax validation using PostgreSQL's parse check
+      // We'll use PREPARE to validate without executing
+      const validateQuery = `PREPARE validate_stmt AS ${query}`;
+
+      try {
+        await pool.query(validateQuery);
+        // If successful, deallocate
+        try {
+          await pool.query('DEALLOCATE validate_stmt');
+        } catch (e) {
+          // Ignore deallocation errors
+        }
+      } catch (error: any) {
+        // Parse error message to extract line and position
+        const errorMatch = error.message.match(/at character (\d+)/i);
+        const position = errorMatch ? parseInt(errorMatch[1]) : undefined;
+
+        // Estimate line number (rough approximation)
+        const lines = query.substring(0, position || 0).split('\n');
+        const line = lines.length;
+
+        errors.push({
+          line,
+          column: position ? position - query.substring(0, position).lastIndexOf('\n') : undefined,
+          message: error.message,
+          severity: 'error',
+        });
+      }
+
+      // Additional validation checks
+      this.performAdditionalValidation(query, errors, warnings, suggestions);
+
+      return {
+        isValid: errors.length === 0,
+        errors,
+        warnings,
+        suggestions,
+      };
+    } catch (error: any) {
+      this.logger.error(`Query validation error: ${error.message}`);
+      errors.push({
+        message: `Validation failed: ${error.message}`,
+        severity: 'error',
+      });
+
+      return {
+        isValid: false,
+        errors,
+        warnings,
+        suggestions,
+      };
+    }
+  }
+
+  /**
+   * Perform additional validation checks
+   */
+  private performAdditionalValidation(
+    query: string,
+    errors: QueryValidationError[],
+    warnings: QueryValidationWarning[],
+    suggestions: string[],
+  ): void {
+    const queryUpper = query.toUpperCase().trim();
+
+    // Check for SELECT * without LIMIT
+    if (queryUpper.includes('SELECT *') && !queryUpper.includes('LIMIT')) {
+      warnings.push({
+        message: 'SELECT * without LIMIT may return large result sets',
+        suggestion: 'Consider adding a LIMIT clause or selecting specific columns',
+      });
+    }
+
+    // Check for missing WHERE clause in DELETE/UPDATE
+    if (
+      (queryUpper.startsWith('DELETE') || queryUpper.startsWith('UPDATE')) &&
+      !queryUpper.includes('WHERE')
+    ) {
+      warnings.push({
+        message: 'DELETE/UPDATE without WHERE clause will affect all rows',
+        suggestion: 'Add a WHERE clause to limit affected rows',
+      });
+    }
+
+    // Check for potential SQL injection patterns (basic)
+    if (query.includes(';') && query.split(';').length > 2) {
+      warnings.push({
+        message: 'Multiple statements detected',
+        suggestion: 'Execute one statement at a time for security',
+      });
+    }
+
+    // Check for missing indexes hints
+    if (queryUpper.includes('JOIN') && !queryUpper.includes('ON')) {
+      errors.push({
+        message: 'JOIN clause missing ON condition',
+        severity: 'error',
+      });
+    }
+
+    // Performance suggestions
+    if (queryUpper.includes('LIKE') && !queryUpper.includes("LIKE '%")) {
+      suggestions.push('Consider using ILIKE for case-insensitive searches');
+    }
+
+    if (queryUpper.includes('ORDER BY') && !queryUpper.includes('LIMIT')) {
+      suggestions.push('Consider adding LIMIT when using ORDER BY for better performance');
+    }
+  }
+
+  /**
+   * Analyze query and provide optimization recommendations
+   */
+  async optimizeQuery(
+    connectionId: string,
+    query: string,
+    analyze: boolean = true,
+  ): Promise<QueryOptimizationResult> {
+    const pool = this.connectionManager.getPool(connectionId);
+    if (!pool) {
+      throw new NotFoundException(
+        `Connection ${connectionId} not found or not connected`,
+      );
+    }
+
+    try {
+      // Get explain plan
+      const originalPlan = await this.explainQuery(connectionId, query, analyze);
+
+      const recommendations: OptimizationRecommendation[] = [];
+      const planText = originalPlan.plan.toLowerCase();
+
+      // Analyze plan for optimization opportunities
+      if (planText.includes('seq scan')) {
+        recommendations.push({
+          type: 'index',
+          priority: 'high',
+          message: 'Sequential scan detected - consider adding an index',
+          suggestion: 'Add indexes on columns used in WHERE, JOIN, or ORDER BY clauses',
+          estimatedImpact: 'High - can reduce scan time significantly',
+        });
+      }
+
+      if (planText.includes('nested loop')) {
+        recommendations.push({
+          type: 'join',
+          priority: 'medium',
+          message: 'Nested loop join detected',
+          suggestion: 'Consider using hash join or merge join for larger datasets',
+          estimatedImpact: 'Medium - can improve join performance',
+        });
+      }
+
+      if (planText.includes('sort')) {
+        recommendations.push({
+          type: 'sort',
+          priority: 'medium',
+          message: 'Sort operation detected',
+          suggestion: 'Consider adding an index on ORDER BY columns to avoid sorting',
+          estimatedImpact: 'Medium - can eliminate sort step',
+        });
+      }
+
+      if (planText.includes('filter')) {
+        recommendations.push({
+          type: 'filter',
+          priority: 'low',
+          message: 'Filter operation detected',
+          suggestion: 'Move filter conditions earlier in the query if possible',
+          estimatedImpact: 'Low - may reduce rows processed',
+        });
+      }
+
+      // Extract performance metrics from plan
+      const costMatch = planText.match(/cost=([\d.]+)\.\.([\d.]+)/);
+      const executionTime = originalPlan.executionTime;
+
+      // Index usage analysis
+      const indexUsage = await this.analyzeIndexUsage(connectionId, query);
+
+      return {
+        originalPlan,
+        recommendations: [...recommendations, ...indexUsage],
+        performanceMetrics: {
+          estimatedCost: costMatch ? parseFloat(costMatch[2]) : undefined,
+          executionTime,
+        },
+      };
+    } catch (error: any) {
+      this.logger.error(`Query optimization error: ${error.message}`);
+      throw new BadRequestException(
+        `Failed to optimize query: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Analyze index usage for a query
+   */
+  private async analyzeIndexUsage(
+    connectionId: string,
+    query: string,
+  ): Promise<OptimizationRecommendation[]> {
+    const recommendations: OptimizationRecommendation[] = [];
+
+    try {
+      // Extract table and column names from query (simplified)
+      const tableMatches = query.matchAll(/FROM\s+["']?(\w+)["']?/gi);
+      const whereMatches = query.matchAll(/WHERE\s+["']?(\w+)["']?/gi);
+
+      const tables = Array.from(tableMatches).map((m) => m[1]);
+      const whereColumns = Array.from(whereMatches).map((m) => m[1]);
+
+      if (whereColumns.length > 0) {
+        recommendations.push({
+          type: 'index',
+          priority: 'high',
+          message: `Columns used in WHERE clause: ${whereColumns.join(', ')}`,
+          suggestion: `Consider adding indexes on: ${whereColumns.join(', ')}`,
+          estimatedImpact: 'High - can significantly improve WHERE clause performance',
+        });
+      }
+
+      // Check for ORDER BY
+      const orderByMatch = query.match(/ORDER\s+BY\s+["']?(\w+)["']?/i);
+      if (orderByMatch) {
+        recommendations.push({
+          type: 'index',
+          priority: 'medium',
+          message: `Column used in ORDER BY: ${orderByMatch[1]}`,
+          suggestion: `Consider adding an index on ${orderByMatch[1]} to avoid sorting`,
+          estimatedImpact: 'Medium - can eliminate sort operation',
+        });
+      }
+    } catch (error: any) {
+      this.logger.warn(`Index usage analysis failed: ${error.message}`);
+    }
+
+    return recommendations;
   }
 }
 

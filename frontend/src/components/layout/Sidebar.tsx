@@ -12,6 +12,7 @@ import {
   Loader2,
   AlertCircle,
   Trash2,
+  TrendingUp,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useConnection } from "@/contexts/ConnectionContext";
@@ -237,6 +238,14 @@ export const Sidebar = () => {
         >
           <Code2 className="w-4 h-4" />
           Query Builder
+        </NavLink>
+        <NavLink
+          to="/indexes"
+          className="flex items-center gap-2 px-3 py-2 text-sm rounded-md hover:bg-sidebar-accent transition-all duration-200 hover:translate-x-1"
+          activeClassName="bg-sidebar-accent"
+        >
+          <TrendingUp className="w-4 h-4" />
+          Index Recommendations
         </NavLink>
       </nav>
 

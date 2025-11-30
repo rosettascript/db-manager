@@ -414,3 +414,156 @@ export interface ApiError {
   error?: string;
 }
 
+// Index Recommendations types
+export interface QueryPattern {
+  query: string;
+  executionCount: number;
+  avgExecutionTime: number;
+  totalExecutionTime: number;
+  tables: string[];
+  columns: string[];
+  lastExecuted: string; // ISO date string
+}
+
+export interface IndexRecommendation {
+  table: string;
+  schema: string;
+  columns: string[];
+  indexType: 'btree' | 'hash' | 'gin' | 'gist' | 'brin';
+  estimatedBenefit: 'high' | 'medium' | 'low';
+  reason: string;
+  createStatement: string;
+  estimatedSize?: string;
+}
+
+export interface IndexUsageStat {
+  schema: string;
+  table: string;
+  indexName: string;
+  indexSize: string;
+  indexSizeBytes: number;
+  indexScans: number;
+  tuplesRead: number;
+  tuplesFetched: number;
+  isUsed: boolean;
+  lastUsed?: string; // ISO date string
+}
+
+export interface IndexAnalysisResponse {
+  recommendations: IndexRecommendation[];
+  usageStats: IndexUsageStat[];
+  queryPatterns: QueryPattern[];
+  summary: {
+    totalIndexes: number;
+    unusedIndexes: number;
+    recommendedIndexes: number;
+    highPriorityRecommendations: number;
+  };
+}
+
+// Search types
+export interface GlobalSearchResult {
+  type: 'table' | 'column' | 'data';
+  schema: string;
+  table: string;
+  column?: string;
+  value?: any;
+  matchScore?: number;
+}
+
+export interface GlobalSearchResponse {
+  results: GlobalSearchResult[];
+  total: number;
+  searchTime: number;
+}
+
+export interface ColumnSearchResult {
+  schema: string;
+  table: string;
+  column: string;
+  dataType: string;
+  nullable: boolean;
+  isPrimaryKey: boolean;
+  isForeignKey: boolean;
+}
+
+export interface ColumnSearchResponse {
+  results: ColumnSearchResult[];
+  total: number;
+}
+
+export interface ColumnAutocompleteResult {
+  schema: string;
+  table: string;
+  column: string;
+  fullPath: string; // schema.table.column
+}
+
+// Query Snippets types
+export interface QuerySnippet {
+  id: string;
+  name: string;
+  snippet: string;
+  description?: string;
+  category?: string;
+  tags?: string[];
+  createdAt: string; // ISO date string
+  updatedAt?: string; // ISO date string
+}
+
+export interface CreateQuerySnippetDto {
+  name: string;
+  snippet: string;
+  description?: string;
+  category?: string;
+  tags?: string[];
+}
+
+export interface UpdateQuerySnippetDto {
+  name?: string;
+  snippet?: string;
+  description?: string;
+  category?: string;
+  tags?: string[];
+}
+
+// Query Validation types
+export interface QueryValidationError {
+  line?: number;
+  column?: number;
+  message: string;
+  severity: 'error' | 'warning';
+}
+
+export interface QueryValidationWarning {
+  message: string;
+  suggestion?: string;
+}
+
+export interface QueryValidationResult {
+  isValid: boolean;
+  errors: QueryValidationError[];
+  warnings: QueryValidationWarning[];
+  suggestions: string[];
+}
+
+// Query Optimization types
+export interface OptimizationRecommendation {
+  type: 'index' | 'join' | 'filter' | 'sort' | 'other';
+  priority: 'high' | 'medium' | 'low';
+  message: string;
+  suggestion: string;
+  estimatedImpact?: string;
+}
+
+export interface QueryOptimizationResult {
+  originalPlan: ExplainPlanResponse;
+  optimizedPlan?: ExplainPlanResponse;
+  recommendations: OptimizationRecommendation[];
+  performanceMetrics: {
+    estimatedCost?: number;
+    executionTime?: number;
+    rowsExamined?: number;
+  };
+}
+

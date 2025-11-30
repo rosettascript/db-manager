@@ -203,5 +203,101 @@ export const exportService = {
     document.body.removeChild(link);
     window.URL.revokeObjectURL(downloadUrl);
   },
+
+  /**
+   * Export full database dump (schema + data)
+   * GET /api/connections/:connectionId/export/database-dump
+   */
+  async exportFullDatabaseDump(
+    connectionId: string,
+    options: {
+      schemas?: string[];
+      includeData?: boolean;
+    } = {},
+  ): Promise<void> {
+    const params = new URLSearchParams();
+    
+    if (options.schemas && options.schemas.length > 0) {
+      params.append('schemas', options.schemas.join(','));
+    }
+    if (options.includeData !== undefined) {
+      params.append('includeData', options.includeData.toString());
+    }
+
+    const endpoint = `connections/${connectionId}/export/database-dump${params.toString() ? `?${params.toString()}` : ''}`;
+    const url = getApiUrl(endpoint);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+    });
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        message: response.statusText,
+      }));
+      throw new Error(error.message || `Export failed: ${response.statusText}`);
+    }
+    
+    const blob = await response.blob();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const downloadUrl = window.URL.createObjectURL(new Blob([blob], { type: 'application/sql' }));
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `database_dump_${timestamp}.sql`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
+  },
+
+  /**
+   * Export schema-only (no data)
+   * GET /api/connections/:connectionId/export/schema-only
+   */
+  async exportSchemaOnly(
+    connectionId: string,
+    options: {
+      schemas?: string[];
+    } = {},
+  ): Promise<void> {
+    const params = new URLSearchParams();
+    
+    if (options.schemas && options.schemas.length > 0) {
+      params.append('schemas', options.schemas.join(','));
+    }
+
+    const endpoint = `connections/${connectionId}/export/schema-only${params.toString() ? `?${params.toString()}` : ''}`;
+    const url = getApiUrl(endpoint);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include',
+    });
+    
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        message: response.statusText,
+      }));
+      throw new Error(error.message || `Export failed: ${response.statusText}`);
+    }
+    
+    const blob = await response.blob();
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+    const downloadUrl = window.URL.createObjectURL(new Blob([blob], { type: 'application/sql' }));
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = `schema_only_${timestamp}.sql`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
+  },
 };
 

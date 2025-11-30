@@ -11,6 +11,9 @@ import { DiagramModule } from './diagram/diagram.module';
 import { ExportModule } from './export/export.module';
 import { ForeignKeysModule } from './foreign-keys/foreign-keys.module';
 import { ChartsModule } from './charts/charts.module';
+import { IndexRecommendationsModule } from './index-recommendations/index-recommendations.module';
+import { SearchModule } from './search/search.module';
+import { QuerySnippetsModule } from './query-snippets/query-snippets.module';
 
 @Module({
   imports: [
@@ -27,6 +30,9 @@ import { ChartsModule } from './charts/charts.module';
     ExportModule,
     ForeignKeysModule,
     ChartsModule,
+    IndexRecommendationsModule,
+    SearchModule,
+    QuerySnippetsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

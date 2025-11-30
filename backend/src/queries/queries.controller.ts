@@ -11,6 +11,8 @@ import { ExecuteQueryDto } from './dto/execute-query.dto';
 import {
   QueryExecutionResponse,
   ExplainPlanResponse,
+  QueryValidationResult,
+  QueryOptimizationResult,
 } from './interfaces/query.interface';
 
 @Controller('connections/:connectionId/query')
@@ -56,6 +58,34 @@ export class QueriesController {
     @Body() body: { queryId: string },
   ): Promise<{ success: boolean; message: string }> {
     return this.queriesService.cancelQuery(connectionId, body.queryId);
+  }
+
+  /**
+   * Validate query syntax
+   * POST /api/connections/:connectionId/query/validate
+   */
+  @Post('validate')
+  async validateQuery(
+    @Param('connectionId') connectionId: string,
+    @Body() body: { query: string },
+  ): Promise<QueryValidationResult> {
+    return this.queriesService.validateQuery(connectionId, body.query);
+  }
+
+  /**
+   * Optimize query and get recommendations
+   * POST /api/connections/:connectionId/query/optimize
+   */
+  @Post('optimize')
+  async optimizeQuery(
+    @Param('connectionId') connectionId: string,
+    @Body() body: { query: string; analyze?: boolean },
+  ): Promise<QueryOptimizationResult> {
+    return this.queriesService.optimizeQuery(
+      connectionId,
+      body.query,
+      body.analyze || false,
+    );
   }
 }
 
