@@ -1,0 +1,29 @@
+[
+  {
+    "connectionId": "conn_1764507937408_2k88o1wwk",
+    "query": "drop database yown\n",
+    "timestamp": "2025-11-30T13:07:42.756Z",
+    "executionTime": 41,
+    "rowsAffected": 0,
+    "success": true,
+    "id": "q_1764508062756_r5p4evuk9"
+  },
+  {
+    "connectionId": "conn_1764507937408_2k88o1wwk",
+    "query": "drop database yown\n",
+    "timestamp": "2025-11-30T13:07:31.437Z",
+    "executionTime": 5006,
+    "success": false,
+    "error": "database \"yown\" is being accessed by other users",
+    "id": "q_1764508051437_7t3peod13"
+  },
+  {
+    "connectionId": "conn_1764507937408_2k88o1wwk",
+    "query": "create database yown\n",
+    "timestamp": "2025-11-30T13:06:32.659Z",
+    "executionTime": 220,
+    "rowsAffected": 0,
+    "success": true,
+    "id": "q_1764507992659_ewwrvlfkc"
+  }
+]

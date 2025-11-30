@@ -1,6 +1,15 @@
 [
   {
     "connectionId": "conn_1764401629369_ayww2mbaq",
+    "query": "select * from users where email = :email",
+    "timestamp": "2025-11-30T13:28:49.796Z",
+    "executionTime": 16,
+    "rowCount": 1,
+    "success": true,
+    "id": "q_1764509329796_5l1sroi26"
+  },
+  {
+    "connectionId": "conn_1764401629369_ayww2mbaq",
     "query": "select * from bets\n",
     "timestamp": "2025-11-30T04:31:20.317Z",
     "executionTime": 1,
