@@ -19,6 +19,7 @@ export * from './services/diagram.service';
 export * from './services/export.service';
 export * from './services/foreign-keys.service';
 export * from './services/charts.service';
+export * from './services/schema-dump.service';
 
 // Re-export apiClient as default for convenience
 export { apiClient as default } from './client';

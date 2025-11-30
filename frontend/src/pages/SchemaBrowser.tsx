@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Search, Database, Table2, RefreshCcw, Loader2, AlertCircle } from "lucide-react";
+import { Search, Database, Table2, RefreshCcw, Loader2, AlertCircle, Download } from "lucide-react";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { ErrorDisplay } from "@/components/error/ErrorDisplay";
 import { ConnectionErrorHandler } from "@/components/error/ConnectionErrorHandler";
 import { LoadingSkeleton } from "@/components/loading/LoadingSkeleton";
+import { SchemaDumpDialog } from "@/components/schema-dump/SchemaDumpDialog";
 import { NoTablesEmptyState } from "@/components/empty/EmptyState";
 
 const SchemaBrowser = () => {
@@ -101,6 +102,8 @@ const SchemaBrowser = () => {
     return `/table/${table.id}`;
   };
 
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+
   return (
     <div className="h-full flex flex-col">
       <div className="border-b border-border bg-card px-6 py-4 animate-fade-in">
@@ -111,25 +114,37 @@ const SchemaBrowser = () => {
               Explore database structure and relationships
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            onClick={() => refreshMutation.mutate()}
-            disabled={!activeConnection || refreshMutation.isPending}
-          >
-            {refreshMutation.isPending ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Refreshing...
-              </>
-            ) : (
-              <>
-                <RefreshCcw className="w-4 h-4" />
-                Refresh Schema
-              </>
-            )}
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => setExportDialogOpen(true)}
+              disabled={!activeConnection}
+            >
+              <Download className="w-4 h-4" />
+              Export Schema
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-2"
+              onClick={() => refreshMutation.mutate()}
+              disabled={!activeConnection || refreshMutation.isPending}
+            >
+              {refreshMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Refreshing...
+                </>
+              ) : (
+                <>
+                  <RefreshCcw className="w-4 h-4" />
+                  Refresh Schema
+                </>
+              )}
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-4 gap-4">
@@ -322,6 +337,14 @@ const SchemaBrowser = () => {
           </>
         )}
       </div>
+
+      {activeConnection && (
+        <SchemaDumpDialog
+          open={exportDialogOpen}
+          onOpenChange={setExportDialogOpen}
+          connectionId={activeConnection.id}
+        />
+      )}
     </div>
   );
 };

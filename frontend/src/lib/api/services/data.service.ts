@@ -165,5 +165,31 @@ export const dataService = {
     
     return apiClient.put<UpdateRowResponse>(url, dto);
   },
+
+  /**
+   * Get distinct values from a column (for autocomplete)
+   * GET /api/connections/:connectionId/db/tables/:schema/:table/column/:column/values
+   */
+  async getColumnValues(
+    connectionId: string,
+    schema: string,
+    table: string,
+    column: string,
+    options?: { search?: string; limit?: number },
+  ): Promise<{ values: string[] }> {
+    const queryParams = new URLSearchParams();
+    
+    if (options?.search) {
+      queryParams.append('search', options.search);
+    }
+    if (options?.limit) {
+      queryParams.append('limit', options.limit.toString());
+    }
+
+    const queryString = queryParams.toString();
+    const url = `connections/${connectionId}/db/tables/${encodeURIComponent(schema)}/${encodeURIComponent(table)}/column/${encodeURIComponent(column)}/values${queryString ? `?${queryString}` : ''}`;
+    
+    return apiClient.get<{ values: string[] }>(url);
+  },
 };
 

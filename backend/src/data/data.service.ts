@@ -254,6 +254,74 @@ export class DataService {
   }
 
   /**
+   * Get distinct values from a column (for autocomplete)
+   */
+  async getColumnValues(
+    connectionId: string,
+    schema: string,
+    table: string,
+    column: string,
+    options: { search?: string; limit?: number } = {},
+  ): Promise<{ values: string[] }> {
+    const pool = this.connectionManager.getPool(connectionId);
+    if (!pool) {
+      throw new NotFoundException(
+        `Connection ${connectionId} not found or not connected`,
+      );
+    }
+
+    // Sanitize identifiers
+    const sanitizedSchema = this.queryBuilder.sanitizeIdentifier(schema);
+    const sanitizedTable = this.queryBuilder.sanitizeIdentifier(table);
+    const sanitizedColumn = this.queryBuilder.sanitizeIdentifier(column);
+
+    // Build query with optional search filter
+    // Use subquery to allow complex ORDER BY with DISTINCT
+    let query = `
+      SELECT value FROM (
+        SELECT DISTINCT "${sanitizedColumn}"::text as value
+        FROM "${sanitizedSchema}"."${sanitizedTable}"
+        WHERE "${sanitizedColumn}" IS NOT NULL
+    `;
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    if (options.search && options.search.length > 0) {
+      query += ` AND "${sanitizedColumn}"::text ILIKE $${paramIndex}`;
+      params.push(`%${options.search}%`);
+      paramIndex++;
+    }
+
+    query += `) subquery`;
+
+    if (options.search && options.search.length > 0) {
+      // Order by: prefix matches first, then contains matches
+      query += ` ORDER BY 
+        CASE 
+          WHEN value ILIKE $${paramIndex} THEN 1
+          ELSE 2
+        END,
+        value`;
+      params.push(`${options.search}%`);
+      paramIndex++;
+    } else {
+      query += ` ORDER BY value`;
+    }
+
+    query += ` LIMIT $${paramIndex}`;
+    params.push(options.limit || 20);
+
+    try {
+      const result = await pool.query(query, params);
+      return {
+        values: result.rows.map((row) => row.value),
+      };
+    } catch (error: any) {
+      throw new Error(`Failed to fetch column values: ${error.message}`);
+    }
+  }
+
+  /**
    * Delete a single row by primary key
    */
   async deleteRow(

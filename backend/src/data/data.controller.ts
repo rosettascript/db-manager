@@ -79,6 +79,25 @@ export class DataController {
   }
 
   /**
+   * Get distinct values from a column (for autocomplete)
+   * GET /api/connections/:connectionId/db/tables/:schema/:table/column/:column/values
+   */
+  @Get('column/:column/values')
+  async getColumnValues(
+    @Param('connectionId') connectionId: string,
+    @Param('schema') schema: string,
+    @Param('table') table: string,
+    @Param('column') column: string,
+    @Query('search') search?: string,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
+  ): Promise<{ values: string[] }> {
+    return this.dataService.getColumnValues(connectionId, schema, table, column, {
+      search,
+      limit: Math.min(limit || 20, 50), // Max 50 values
+    });
+  }
+
+  /**
    * Get table row count (with optional filtering)
    * GET /api/connections/:connectionId/tables/:schema/:table/count
    */

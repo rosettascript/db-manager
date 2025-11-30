@@ -14,6 +14,7 @@ import { ChartsModule } from './charts/charts.module';
 import { IndexRecommendationsModule } from './index-recommendations/index-recommendations.module';
 import { SearchModule } from './search/search.module';
 import { QuerySnippetsModule } from './query-snippets/query-snippets.module';
+import { SchemaDumpModule } from './schema-dump/schema-dump.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { QuerySnippetsModule } from './query-snippets/query-snippets.module';
     IndexRecommendationsModule,
     SearchModule,
     QuerySnippetsModule,
+    SchemaDumpModule,
   ],
   controllers: [AppController],
   providers: [AppService],
