@@ -1668,7 +1668,7 @@ const ERDiagramContent = () => {
             className="fixed inset-0 z-40"
             onClick={() => {
               setSelectedNodeForRelationships(null);
-              setClickedNode(null);
+              // Keep clickedNode to maintain highlighting
             }}
           />
           <RelationshipPopup
@@ -1679,7 +1679,7 @@ const ERDiagramContent = () => {
             }))}
             onClose={() => {
               setSelectedNodeForRelationships(null);
-              setClickedNode(null);
+              // Keep clickedNode to maintain highlighting
             }}
             onNodeSelect={(nodeId) => {
               // Find and focus on the selected node
