@@ -64,41 +64,30 @@ const TableViewer = () => {
   const { activeConnection } = useConnection();
   const queryClient = useQueryClient();
 
-  // Debug logging
-  useEffect(() => {
-    console.log('[TableViewer] tableId changed:', tableId);
-    console.log('[TableViewer] location.pathname:', location.pathname);
-  }, [tableId, location.pathname]);
 
   // Parse tableId to extract schema and table name
   // Format: "schema.tableName"
   const parsedTable = useMemo(() => {
     if (!tableId || typeof tableId !== 'string') {
-      console.log('[TableViewer] No tableId or invalid type');
       return null;
     }
     try {
       const parts = tableId.split('.');
       if (!parts || parts.length < 2) {
-        console.log('[TableViewer] Invalid tableId format:', tableId);
         return null;
       }
       const schema = parts[0]?.trim();
       const tableNameParts = parts.slice(1);
       if (!schema || tableNameParts.length === 0) {
-        console.log('[TableViewer] Missing schema or table name');
         return null;
       }
       const tableName = tableNameParts.join('.').trim();
       if (!tableName) {
-        console.log('[TableViewer] Empty table name');
         return null;
       }
       const parsed = { schema, tableName, fullId: tableId };
-      console.log('[TableViewer] Parsed table:', parsed);
       return parsed;
     } catch (error) {
-      console.error('Error parsing tableId:', error, tableId);
       return null;
     }
   }, [tableId]);
@@ -156,8 +145,6 @@ const TableViewer = () => {
     const tableIdChanged = tableId && prevTableIdRef.current !== tableId;
     
     if (tableIdChanged || pathnameChanged) {
-      console.log('[TableViewer] Route change detected:', { tableIdChanged, pathnameChanged, tableId, pathname: location.pathname });
-      
       const prevTableId = prevTableIdRef.current;
       prevTableIdRef.current = tableId || null;
       prevPathnameRef.current = location.pathname;
@@ -203,12 +190,11 @@ const TableViewer = () => {
               });
             }
           } catch (error) {
-            console.error('Error invalidating previous table queries:', error);
+            // Silently handle query invalidation errors
           }
         }
         
         // Invalidate queries for the new table to force fresh fetch
-        console.log('[TableViewer] Invalidating queries for new table:', parsedTable);
         queryClient.invalidateQueries({
           queryKey: ['table-details', activeConnection.id, parsedTable.schema, parsedTable.tableName],
         });
@@ -462,7 +448,7 @@ const TableViewer = () => {
         const parsed = JSON.parse(savedTrail);
         setBreadcrumbTrail(parsed);
       } catch (e) {
-        console.error('Failed to parse saved trail:', e);
+        // Silently handle parse errors
       }
     }
   }, []);
@@ -535,7 +521,6 @@ const TableViewer = () => {
       setTimeout(() => setCopiedCell(null), 2000);
       toast.success("Copied to clipboard");
     } catch (err) {
-      console.error('Failed to copy:', err);
       toast.error("Failed to copy");
     }
   }, []);
@@ -575,7 +560,6 @@ const TableViewer = () => {
       await navigator.clipboard.writeText(text);
       toast.success("Row copied to clipboard");
     } catch (err) {
-      console.error('Failed to copy:', err);
       toast.error("Failed to copy row");
     }
   }, [filteredColumns]);
@@ -686,7 +670,6 @@ const TableViewer = () => {
         toast.error(response.message || 'Failed to delete rows');
       }
     } catch (error: any) {
-      console.error('Delete error:', error);
       toast.error(error.message || 'Failed to delete rows');
     } finally {
       setIsDeleting(false);
@@ -740,7 +723,6 @@ const TableViewer = () => {
         toast.error(response.message || 'Failed to update rows');
       }
     } catch (error: any) {
-      console.error('Update error:', error);
       toast.error(error.message || 'Failed to update rows');
     } finally {
       setIsUpdating(false);
@@ -844,7 +826,6 @@ const TableViewer = () => {
         toast.error(response.message || 'Failed to update cell');
       }
     } catch (error: any) {
-      console.error('Cell update error:', error);
       toast.error(error.message || 'Failed to update cell');
     } finally {
       setIsSavingCell(false);
@@ -885,7 +866,6 @@ const TableViewer = () => {
         toast.error(response.message || 'Failed to insert row');
       }
     } catch (error: any) {
-      console.error('Insert error:', error);
       toast.error(error.message || 'Failed to insert row');
     } finally {
       setIsInserting(false);
@@ -1071,7 +1051,6 @@ const TableViewer = () => {
       setIsExporting(false);
       setExportProgress(0);
     } catch (error) {
-      console.error("Export error:", error);
       toast.error("Failed to export table", { id: toastId });
       setIsExporting(false);
       setExportProgress(0);
@@ -1143,7 +1122,6 @@ const TableViewer = () => {
       setIsExporting(false);
       setExportProgress(0);
     } catch (error) {
-      console.error("Export error:", error);
       toast.error("Failed to export table", { id: toastId });
       setIsExporting(false);
       setExportProgress(0);

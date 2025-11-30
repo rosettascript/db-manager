@@ -82,7 +82,7 @@ export function CommandPalette({ commands = defaultCommands }: CommandPalettePro
         setRecentCommands(parsed);
       }
     } catch (error) {
-      console.error('Failed to load recent commands:', error);
+      // Silently handle parse errors
     }
   }, []);
 
@@ -99,7 +99,7 @@ export function CommandPalette({ commands = defaultCommands }: CommandPalettePro
         return updated;
       });
     } catch (error) {
-      console.error('Failed to save recent command:', error);
+      // Silently handle storage errors
     }
   }, []);
 

@@ -110,7 +110,6 @@ export const hierarchicalLayout = async (
       return node;
     });
   } catch (error) {
-    console.error("Layout error:", error);
     return forceLayout(nodes, expanded);
   }
 };

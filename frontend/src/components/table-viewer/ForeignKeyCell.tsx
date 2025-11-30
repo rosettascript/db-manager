@@ -61,7 +61,6 @@ export const ForeignKeyCell = ({
         navigate(`/table/${targetTableId}`);
       }
     } catch (error: any) {
-      console.error("FK navigation error:", error);
       // Fallback: navigate to referenced table assuming same schema
       const targetTableId = `${schema}.${foreignKey.referencedTable}`;
       navigate(`/table/${targetTableId}`);

@@ -139,11 +139,6 @@ export function logError(error: unknown, context?: string): void {
     stack: error instanceof Error ? error.stack : undefined,
   };
 
-  // Log to console in development
-  if (import.meta.env.DEV) {
-    console.error('[Error Log]', errorLog);
-  }
-
   // Store in localStorage for debugging (optional, limited to last 50 errors)
   try {
     const existingLogs = JSON.parse(localStorage.getItem('error-logs') || '[]');
@@ -155,9 +150,6 @@ export function logError(error: unknown, context?: string): void {
     localStorage.setItem('error-logs', JSON.stringify(existingLogs));
   } catch (e) {
     // Ignore localStorage errors
-    if (import.meta.env.DEV) {
-      console.warn('Failed to store error log:', e);
-    }
   }
 
   // TODO: In production, send to error tracking service (e.g., Sentry)

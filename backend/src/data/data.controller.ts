@@ -74,7 +74,6 @@ export class DataController {
         filters: filterArray,
       });
     } catch (error: any) {
-      console.error('[DataController] Error in getTableData:', error);
       throw error;
     }
   }

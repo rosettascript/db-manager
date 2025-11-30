@@ -282,7 +282,7 @@ const ERDiagramContent = () => {
         return JSON.parse(saved) as Record<string, { x: number; y: number }>;
       }
     } catch (error) {
-      console.error('Failed to load saved positions:', error);
+      // Silently handle parse errors
     }
     return null;
   }, [storageKey]);
@@ -293,7 +293,7 @@ const ERDiagramContent = () => {
     try {
       localStorage.setItem(storageKey, JSON.stringify(nodePositions));
     } catch (error) {
-      console.error('Failed to save positions:', error);
+      // Silently handle storage errors
     }
   }, [storageKey]);
 
@@ -303,7 +303,7 @@ const ERDiagramContent = () => {
     try {
       localStorage.removeItem(storageKey);
     } catch (error) {
-      console.error('Failed to clear saved positions:', error);
+      // Silently handle storage errors
     }
   }, [storageKey]);
 
@@ -441,6 +441,14 @@ const ERDiagramContent = () => {
     setClickedNode(null);
   }, []);
 
+  // Use a ref to store the current edges to avoid infinite loops
+  const edgesRef = useRef<Edge[]>([]);
+  
+  // Update the ref whenever edges change
+  useEffect(() => {
+    edgesRef.current = edges;
+  }, [edges]);
+
   // Update highlights when clickedNode or hoveredNode changes
   useEffect(() => {
     // Click takes priority over hover
@@ -463,11 +471,12 @@ const ERDiagramContent = () => {
       return;
     }
 
-    // Find connected nodes
+    // Find connected nodes using the ref to avoid dependency on edges
+    const currentEdges = edgesRef.current;
     const connectedNodes = new Set<string>([activeNodeId]);
     const connectedEdges = new Set<string>();
     
-    edges.forEach((edge) => {
+    currentEdges.forEach((edge) => {
       if (edge.source === activeNodeId) {
         connectedNodes.add(edge.target);
         connectedEdges.add(edge.id);
@@ -508,7 +517,7 @@ const ERDiagramContent = () => {
         },
       }))
     );
-  }, [clickedNode, hoveredNode, edges, setNodes, setEdges]);
+  }, [clickedNode, hoveredNode, setNodes, setEdges]);
 
   const handleAutoLayout = useCallback(
     async (algorithm: LayoutAlgorithm) => {
@@ -746,7 +755,6 @@ const ERDiagramContent = () => {
       setIsExporting(false);
       setExportProgress(0);
     } catch (error) {
-      console.error("Export error:", error);
       // Restore viewport even on error
       setViewport(currentViewport);
       toast.error("Failed to export diagram", { id: toastId });
@@ -863,7 +871,6 @@ const ERDiagramContent = () => {
       setIsExporting(false);
       setExportProgress(0);
     } catch (error) {
-      console.error("Export error:", error);
       toast.error("Failed to export diagram", { id: toastId });
       setIsExporting(false);
       setExportProgress(0);
@@ -1032,7 +1039,6 @@ const ERDiagramContent = () => {
       setIsExporting(false);
       setExportProgress(0);
     } catch (error) {
-      console.error("Export error:", error);
       toast.error("Failed to export diagram", { id: toastId });
       setIsExporting(false);
       setExportProgress(0);
@@ -1133,7 +1139,6 @@ const ERDiagramContent = () => {
       setIsExporting(false);
       setExportProgress(0);
     } catch (error) {
-      console.error("Export error:", error);
       toast.error("Failed to export diagram", { id: toastId });
       setIsExporting(false);
       setExportProgress(0);
@@ -1279,7 +1284,6 @@ const ERDiagramContent = () => {
                       fitView({ duration: 400, padding: 0.1 });
                     }, 100);
                   } catch (error) {
-                    console.error("Layout reapply error:", error);
                     // If layout fails, still update nodes with expanded state
                     setNodes(updatedNodes);
                   }
