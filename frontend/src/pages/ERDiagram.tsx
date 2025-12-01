@@ -182,7 +182,7 @@ const ERDiagramContent = () => {
   } = useQuery({
     queryKey: ['schemas', activeConnection?.id],
     queryFn: () => schemasService.getSchemas(activeConnection!.id),
-    enabled: !!activeConnection,
+    enabled: !!activeConnection && activeConnection.status === 'connected',
     staleTime: 60000,
   });
 
@@ -205,7 +205,7 @@ const ERDiagramContent = () => {
       schemas: selectedSchemas.length > 0 ? selectedSchemas : undefined,
       showIsolatedTables,
     }),
-    enabled: !!activeConnection && selectedSchemas.length > 0,
+    enabled: !!activeConnection && activeConnection.status === 'connected' && selectedSchemas.length > 0,
     staleTime: 60000, // 1 minute
   });
 

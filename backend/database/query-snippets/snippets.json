@@ -1,0 +1,90 @@
+[
+  {
+    "id": "snippet_1764516544502_qj2fj6gi6",
+    "name": "Select All Users",
+    "snippet": "select * from users;",
+    "category": "Uncategorized",
+    "tags": [],
+    "createdAt": "2025-11-30T15:29:04.502Z"
+  },
+  {
+    "id": "snippet_1764573136884_d8rfi6xbd",
+    "name": "Create User",
+    "snippet": "CREATE USER myuser WITH PASSWORD 'mypassword';",
+    "category": "Uncategorized",
+    "tags": [],
+    "createdAt": "2025-12-01T07:12:16.884Z"
+  },
+  {
+    "id": "snippet_1764573159324_px9koeyej",
+    "name": "Create Database",
+    "snippet": "CREATE DATABASE mydatabase OWNER myuser;",
+    "category": "Uncategorized",
+    "tags": [],
+    "createdAt": "2025-12-01T07:12:39.324Z"
+  },
+  {
+    "id": "snippet_1764573184380_37wxmgmqf",
+    "name": "Grant Privilege to a user",
+    "snippet": "GRANT ALL PRIVILEGES ON DATABASE mydatabase TO myuser;",
+    "category": "Uncategorized",
+    "tags": [],
+    "createdAt": "2025-12-01T07:13:04.380Z"
+  },
+  {
+    "id": "snippet_1764573239842_0pu43lnob",
+    "name": "Super User Command",
+    "snippet": "ALTER USER myuser WITH SUPERUSER;",
+    "category": "Uncategorized",
+    "tags": [],
+    "createdAt": "2025-12-01T07:13:59.842Z"
+  },
+  {
+    "id": "snippet_1764575215313_p92ouk5gx",
+    "name": "UUID generation",
+    "snippet": "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";",
+    "category": "Uncategorized",
+    "tags": [],
+    "createdAt": "2025-12-01T07:46:55.313Z"
+  },
+  {
+    "id": "snippet_1764575235791_mcwkfibj8",
+    "name": "Cryptographic functions (password hashing)",
+    "snippet": "CREATE EXTENSION IF NOT EXISTS pgcrypto;",
+    "category": "Uncategorized",
+    "tags": [],
+    "createdAt": "2025-12-01T07:47:15.791Z"
+  },
+  {
+    "id": "snippet_1764575250839_laub25n7e",
+    "name": "Key/value store",
+    "snippet": "CREATE EXTENSION IF NOT EXISTS hstore;",
+    "category": "Uncategorized",
+    "tags": [],
+    "createdAt": "2025-12-01T07:47:30.839Z"
+  },
+  {
+    "id": "snippet_1764575268943_gzo0zabef",
+    "name": "Full-text search support enhancements",
+    "snippet": "CREATE EXTENSION IF NOT EXISTS unaccent;",
+    "category": "Uncategorized",
+    "tags": [],
+    "createdAt": "2025-12-01T07:47:48.943Z"
+  },
+  {
+    "id": "snippet_1764575284041_rbsfo3p6m",
+    "name": "Geometry / GIS support",
+    "snippet": "CREATE EXTENSION IF NOT EXISTS postgis;",
+    "category": "Uncategorized",
+    "tags": [],
+    "createdAt": "2025-12-01T07:48:04.041Z"
+  },
+  {
+    "id": "snippet_1764575302131_tc2u6llsp",
+    "name": "Performance monitoring",
+    "snippet": "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;",
+    "category": "Uncategorized",
+    "tags": [],
+    "createdAt": "2025-12-01T07:48:22.131Z"
+  }
+]

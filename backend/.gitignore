@@ -45,7 +45,6 @@ lerna-debug.log*
 /database/connections.json.backup.*
 /database/query-history/*.json
 /database/saved-queries/*.json
-/database/query-snippets/*.json
 # Keep .gitkeep files
 !/database/.gitkeep
 !/database/query-history/.gitkeep

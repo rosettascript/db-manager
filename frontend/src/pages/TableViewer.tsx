@@ -219,7 +219,7 @@ const TableViewer = () => {
       parsedTable!.schema,
       parsedTable!.tableName,
     ),
-    enabled: !!activeConnection && !!parsedTable,
+    enabled: !!activeConnection && activeConnection.status === 'connected' && !!parsedTable,
     staleTime: 300000, // Consider fresh for 5 minutes
     gcTime: 300000, // Keep in cache for 5 minutes
     refetchOnMount: 'always', // Always refetch when component mounts with new table
@@ -299,7 +299,7 @@ const TableViewer = () => {
         parsedTable?.tableName,
       ]);
       const tableToUse = table || cachedTable;
-      const enabled = !!activeConnection && !!parsedTable && !!tableToUse && tableToUse.columns.length > 0;
+      const enabled = !!activeConnection && activeConnection.status === 'connected' && !!parsedTable && !!tableToUse && tableToUse.columns.length > 0;
       return enabled;
     })(),
     staleTime: 300000, // Consider fresh for 5 minutes - prevents refetch on tab switch

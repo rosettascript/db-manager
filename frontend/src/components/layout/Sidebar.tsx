@@ -65,7 +65,7 @@ export const Sidebar = () => {
   } = useQuery<Schema[]>({
     queryKey: ['schemas', activeConnection?.id],
     queryFn: () => schemasService.getSchemas(activeConnection!.id),
-    enabled: !!activeConnection,
+    enabled: !!activeConnection && activeConnection.status === 'connected',
     staleTime: 60000, // Consider fresh for 1 minute
   });
 
@@ -76,7 +76,7 @@ export const Sidebar = () => {
   } = useQuery<Table[]>({
     queryKey: ['tables', activeConnection?.id],
     queryFn: () => schemasService.getTables(activeConnection!.id),
-    enabled: !!activeConnection,
+    enabled: !!activeConnection && activeConnection.status === 'connected',
     staleTime: 60000,
   });
 

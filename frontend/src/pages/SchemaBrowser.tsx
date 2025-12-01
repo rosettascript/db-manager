@@ -34,7 +34,7 @@ const SchemaBrowser = () => {
   } = useQuery<Schema[]>({
     queryKey: ['schemas', activeConnection?.id],
     queryFn: () => schemasService.getSchemas(activeConnection!.id),
-    enabled: !!activeConnection,
+    enabled: !!activeConnection && activeConnection.status === 'connected',
     staleTime: 60000, // Consider fresh for 1 minute
   });
 
@@ -47,7 +47,7 @@ const SchemaBrowser = () => {
   } = useQuery<Table[]>({
     queryKey: ['tables', activeConnection?.id],
     queryFn: () => schemasService.getTables(activeConnection!.id),
-    enabled: !!activeConnection,
+    enabled: !!activeConnection && activeConnection.status === 'connected',
     staleTime: 60000,
   });
 
@@ -60,7 +60,7 @@ const SchemaBrowser = () => {
   } = useQuery<DatabaseStats>({
     queryKey: ['database-stats', activeConnection?.id],
     queryFn: () => schemasService.getDatabaseStats(activeConnection!.id),
-    enabled: !!activeConnection,
+    enabled: !!activeConnection && activeConnection.status === 'connected',
     staleTime: 60000,
   });
 

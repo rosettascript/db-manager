@@ -15,12 +15,54 @@ import { Keyboard } from "lucide-react";
 import { useSettings } from "@/contexts/SettingsContext";
 import { GlobalSearch } from "@/components/search/GlobalSearch";
 import { useKeyboardShortcut } from "@/hooks/useKeyboardShortcut";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { connectionsService } from "@/lib/api/services/connections.service";
+import { toast } from "sonner";
+import type { Connection } from "@/lib/api/types";
 
 export const Header = () => {
   const { activeConnection, setActiveConnection, connections } = useConnection();
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const { open: openSettings } = useSettings();
+  const queryClient = useQueryClient();
+
+  // Connect mutation for auto-connecting when switching databases
+  const connectMutation = useMutation({
+    mutationFn: (id: string) => connectionsService.connect(id),
+    onSuccess: async (_, id) => {
+      // Invalidate and refetch connections to get updated status
+      await queryClient.invalidateQueries({ queryKey: ['connections'] });
+      await queryClient.refetchQueries({ queryKey: ['connections'] });
+      queryClient.invalidateQueries({ queryKey: ['connection-status', id] });
+      
+      // Find the updated connection with new status
+      const updatedConnections = queryClient.getQueryData<Connection[]>(['connections']) || connections;
+      const updatedConn = updatedConnections.find(c => c.id === id);
+      
+      // Update active connection with fresh status
+      if (updatedConn) {
+        setActiveConnection(updatedConn);
+      }
+      
+      const conn = updatedConn || connections.find(c => c.id === id);
+      toast.success(`Connected to ${conn?.name || 'database'}`);
+    },
+    onError: (error: any) => {
+      toast.error(error.message || 'Failed to connect to database');
+    },
+  });
+
+  // Handle database switching with auto-connect
+  const handleDatabaseSwitch = async (conn: Connection) => {
+    // Set active connection immediately for UI feedback
+    setActiveConnection(conn);
+    
+    // Auto-connect if the database is not connected
+    if (conn.status !== 'connected') {
+      connectMutation.mutate(conn.id);
+    }
+  };
 
   // Global search shortcut (Ctrl+Shift+F or Cmd+Shift+F)
   useKeyboardShortcut(
@@ -92,7 +134,7 @@ export const Header = () => {
               connections.map((conn) => (
                 <DropdownMenuItem
                   key={conn.id}
-                  onClick={() => setActiveConnection(conn)}
+                  onClick={() => handleDatabaseSwitch(conn)}
                   className="cursor-pointer"
                 >
                   <div className="flex items-center gap-2 w-full">

@@ -49,3 +49,4 @@ export function downloadTextFile(content: string, filename: string = 'schema-dum
   downloadFile(content, filename, 'text/plain');
 }
 
+

@@ -27,7 +27,6 @@ backend/database/connections.json
 backend/database/connections.json.backup.*
 backend/database/query-history/*.json
 backend/database/saved-queries/*.json
-backend/database/query-snippets/*.json
 # Keep .gitkeep files
 !backend/database/.gitkeep
 !backend/database/query-history/.gitkeep

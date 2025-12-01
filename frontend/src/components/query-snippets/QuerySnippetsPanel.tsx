@@ -176,111 +176,116 @@ export function QuerySnippetsPanel({
         )}
       </div>
 
-      <ScrollArea className="flex-1 p-4">
-        {isLoading ? (
-          <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-24 w-full" />
-            ))}
-          </div>
-        ) : Object.keys(groupedSnippets).length > 0 ? (
-          <div className="space-y-6">
-            {Object.entries(groupedSnippets).map(([category, categorySnippets]) => (
-              <div key={category}>
-                <div className="flex items-center gap-2 mb-3">
-                  <Folder className="w-4 h-4 text-muted-foreground" />
-                  <h3 className="font-medium text-sm text-muted-foreground">{category}</h3>
-                  <Badge variant="secondary" className="text-xs">
-                    {categorySnippets.length}
-                  </Badge>
-                </div>
-                <div className="space-y-2">
-                  {categorySnippets.map((snippet) => (
-                    <div
-                      key={snippet.id}
-                      className="p-3 rounded-lg border hover:bg-accent transition-colors group"
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex-1">
-                          <h4 className="font-medium text-sm">{snippet.name}</h4>
-                          {snippet.description && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              {snippet.description}
-                            </p>
-                          )}
-                        </div>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => setEditingSnippet(snippet)}
-                          >
-                            <Edit className="w-3 h-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7"
-                            onClick={() => handleDelete(snippet.id)}
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="bg-muted p-2 rounded text-xs font-mono mb-2 line-clamp-2">
-                        {snippet.snippet}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={() => handleCopy(snippet.snippet)}
-                        >
-                          <Copy className="w-3 h-3 mr-1" />
-                          Copy
-                        </Button>
-                        {onInsertSnippet && (
-                          <Button
-                            variant="default"
-                            size="sm"
-                            className="h-7 text-xs"
-                            onClick={() => handleInsert(snippet.snippet)}
-                          >
-                            Insert
-                          </Button>
-                        )}
-                        {snippet.tags && snippet.tags.length > 0 && (
-                          <div className="flex gap-1 ml-auto">
-                            {snippet.tags.map((tag) => (
-                              <Badge key={tag} variant="outline" className="text-xs">
-                                {tag}
-                              </Badge>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+      <ScrollArea className="flex-1">
+        <div className="p-4 pb-20">
+          {isLoading ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <Skeleton key={i} className="h-24 w-full" />
+              ))}
+            </div>
+          ) : Object.keys(groupedSnippets).length > 0 ? (
+            <>
+              <div className="space-y-6">
+                {Object.entries(groupedSnippets).map(([category, categorySnippets]) => (
+                  <div key={category}>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Folder className="w-4 h-4 text-muted-foreground" />
+                      <h3 className="font-medium text-sm text-muted-foreground">{category}</h3>
+                      <Badge variant="secondary" className="text-xs">
+                        {categorySnippets.length}
+                      </Badge>
                     </div>
-                  ))}
-                </div>
+                    <div className="space-y-2">
+                      {categorySnippets.map((snippet) => (
+                        <div
+                          key={snippet.id}
+                          className="p-3 rounded-lg border hover:bg-accent transition-colors group"
+                        >
+                          <div className="flex items-start justify-between mb-2">
+                            <div className="flex-1">
+                              <h4 className="font-medium text-sm">{snippet.name}</h4>
+                              {snippet.description && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {snippet.description}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => setEditingSnippet(snippet)}
+                              >
+                                <Edit className="w-3 h-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7"
+                                onClick={() => handleDelete(snippet.id)}
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="bg-muted p-2 rounded text-xs font-mono mb-2 line-clamp-2">
+                            {snippet.snippet}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 text-xs"
+                              onClick={() => handleCopy(snippet.snippet)}
+                            >
+                              <Copy className="w-3 h-3 mr-1" />
+                              Copy
+                            </Button>
+                            {onInsertSnippet && (
+                              <Button
+                                variant="default"
+                                size="sm"
+                                className="h-7 text-xs"
+                                onClick={() => handleInsert(snippet.snippet)}
+                              >
+                                Insert
+                              </Button>
+                            )}
+                            {snippet.tags && snippet.tags.length > 0 && (
+                              <div className="flex gap-1 ml-auto">
+                                {snippet.tags.map((tag) => (
+                                  <Badge key={tag} variant="outline" className="text-xs">
+                                    {tag}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        ) : (
-          <div className="text-center py-8 text-muted-foreground">
-            <FileCode className="w-12 h-12 mx-auto mb-2 opacity-50" />
-            <p>No snippets found</p>
-            <Button
-              variant="outline"
-              size="sm"
-              className="mt-4"
-              onClick={() => setIsCreateDialogOpen(true)}
-            >
-              Create your first snippet
-            </Button>
-          </div>
-        )}
+              <div className="h-16" />
+            </>
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              <FileCode className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p>No snippets found</p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-4"
+                onClick={() => setIsCreateDialogOpen(true)}
+              >
+                Create your first snippet
+              </Button>
+            </div>
+          )}
+        </div>
       </ScrollArea>
 
       {editingSnippet && (
