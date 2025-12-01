@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { cn } from '@/lib/utils';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -24,6 +25,7 @@ import {
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 export default function IndexRecommendations() {
   const { activeConnection } = useConnection();
@@ -66,24 +68,28 @@ export default function IndexRecommendations() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Index Recommendations</h1>
-          <p className="text-muted-foreground mt-1">
-            Analyze query patterns and optimize database performance
-          </p>
-        </div>
-        <Select value={selectedSchema || 'all'} onValueChange={(v) => setSelectedSchema(v === 'all' ? undefined : v)}>
-          <SelectTrigger className="w-[200px]">
-            <SelectValue placeholder="All schemas" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All schemas</SelectItem>
-            {/* Add schema options here if needed */}
-          </SelectContent>
-        </Select>
-      </div>
+    <div className="flex flex-col h-full">
+      <PageHeader
+        title="Index Recommendations"
+        description="Analyze query patterns and optimize database performance"
+        icon={<TrendingUp className="h-5 w-5 text-primary" />}
+        actions={
+          <Select value={selectedSchema || 'all'} onValueChange={(v) => setSelectedSchema(v === 'all' ? undefined : v)}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="All schemas" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All schemas</SelectItem>
+              {analysis?.schemas?.map((schema) => (
+                <SelectItem key={schema} value={schema}>
+                  {schema}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        }
+      />
+      <div className="container mx-auto p-6 space-y-6 flex-1 overflow-auto">
 
       {analysisError && (
         <Alert variant="destructive">
@@ -95,70 +101,81 @@ export default function IndexRecommendations() {
         </Alert>
       )}
 
-      {/* Loading State */}
-      {analysisLoading && (
-        <div className="grid gap-4 md:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-4 w-4" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-8 w-16" />
-              </CardContent>
-            </Card>
-          ))}
+      {/* Summary Cards with ghost loading */}
+      <div className="relative">
+        {/* Real content with fade transition */}
+        <div
+          className={cn(
+            "transition-opacity duration-300 ease-in-out",
+            analysisLoading ? "opacity-0 absolute inset-0 pointer-events-none" : "opacity-100"
+          )}
+        >
+          {analysis && (
+            <div className="grid gap-4 md:grid-cols-4">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Indexes</CardTitle>
+                  <Database className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{analysis.summary.totalIndexes}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Unused Indexes</CardTitle>
+                  <TrendingDown className="h-4 w-4 text-orange-500" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-orange-500">
+                    {analysis.summary.unusedIndexes}
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Recommended</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-blue-500" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-blue-500">
+                    {analysis.summary.recommendedIndexes}
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">High Priority</CardTitle>
+                  <AlertCircle className="h-4 w-4 text-destructive" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-destructive">
+                    {analysis.summary.highPriorityRecommendations}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
-      )}
-
-      {/* Summary Cards */}
-      {!analysisLoading && analysis && (
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Indexes</CardTitle>
-              <Database className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{analysis.summary.totalIndexes}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Unused Indexes</CardTitle>
-              <TrendingDown className="h-4 w-4 text-orange-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-500">
-                {analysis.summary.unusedIndexes}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Recommended</CardTitle>
-              <TrendingUp className="h-4 w-4 text-blue-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-blue-500">
-                {analysis.summary.recommendedIndexes}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">High Priority</CardTitle>
-              <AlertCircle className="h-4 w-4 text-destructive" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-destructive">
-                {analysis.summary.highPriorityRecommendations}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+        {/* Ghost loading for summary cards */}
+        {analysisLoading && (
+          <div className="transition-opacity duration-300 ease-in-out opacity-100">
+            <div className="grid gap-4 md:grid-cols-4">
+              {[1, 2, 3, 4].map((i) => (
+                <Card key={i} className="animate-pulse">
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-4" />
+                  </CardHeader>
+                  <CardContent>
+                    <Skeleton className="h-8 w-16" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {!analysisLoading && !analysis && !analysisError && (
         <Alert>
@@ -185,9 +202,27 @@ export default function IndexRecommendations() {
             </CardHeader>
             <CardContent>
               {recLoading ? (
+                // Ghost loading for recommendations
                 <div className="space-y-4">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-32 w-full" />
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <Card key={`ghost-rec-${i}`} className="border-l-4 border-l-primary animate-pulse">
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <Skeleton className="h-6 w-48 mb-2" />
+                            <Skeleton className="h-4 w-64" />
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Skeleton className="h-5 w-20" />
+                            <Skeleton className="h-5 w-16" />
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                        <Skeleton className="h-4 w-full" />
+                        <Skeleton className="h-20 w-full" />
+                      </CardContent>
+                    </Card>
                   ))}
                 </div>
               ) : recommendations && recommendations.length > 0 ? (
@@ -260,9 +295,21 @@ export default function IndexRecommendations() {
             </CardHeader>
             <CardContent>
               {statsLoading ? (
+                // Ghost loading for usage stats
                 <div className="space-y-4">
-                  {[1, 2, 3].map((i) => (
-                    <Skeleton key={i} className="h-24 w-full" />
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <div key={`ghost-stat-${i}`} className="p-4 rounded-lg border animate-pulse">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 space-y-2">
+                          <Skeleton className="h-5 w-48" />
+                          <div className="grid grid-cols-4 gap-4">
+                            {Array.from({ length: 4 }).map((_, j) => (
+                              <Skeleton key={`ghost-stat-item-${i}-${j}`} className="h-4 w-full" />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   ))}
                 </div>
               ) : usageStats && usageStats.length > 0 ? (
@@ -322,6 +369,7 @@ export default function IndexRecommendations() {
           </Card>
         </TabsContent>
       </Tabs>
+      </div>
     </div>
   );
 }

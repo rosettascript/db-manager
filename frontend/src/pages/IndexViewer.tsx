@@ -6,10 +6,12 @@ import { schemasService } from "@/lib/api/services/schemas.service";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { useState } from "react";
 import { ErrorDisplay } from "@/components/error/ErrorDisplay";
 import { ConnectionErrorHandler } from "@/components/error/ConnectionErrorHandler";
+import { cn } from "@/lib/utils";
 
 const IndexViewer = () => {
   const { indexId } = useParams();
@@ -66,17 +68,7 @@ const IndexViewer = () => {
     );
   }
 
-  if (isLoading) {
-    return (
-      <div className="p-6">
-        <div className="flex items-center justify-center h-64">
-          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !indexDetails) {
+  if (error && !isLoading) {
     return (
       <div className="p-6">
         <ConnectionErrorHandler error={error} />
@@ -96,130 +88,240 @@ const IndexViewer = () => {
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
           </Button>
-          <div className="flex-1">
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Hash className="w-6 h-6" />
-              {indexDetails.name}
-            </h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              {indexDetails.schema}
-            </p>
+          <div className="flex-1 relative">
+            {/* Real header content */}
+            <div
+              className={cn(
+                "transition-opacity duration-300 ease-in-out",
+                isLoading ? "opacity-0 absolute inset-0 pointer-events-none" : "opacity-100"
+              )}
+            >
+              {indexDetails && (
+                <>
+                  <h1 className="text-2xl font-bold flex items-center gap-2">
+                    <Hash className="w-6 h-6" />
+                    {indexDetails.name}
+                  </h1>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {indexDetails.schema}
+                  </p>
+                </>
+              )}
+            </div>
+            {/* Ghost header */}
+            {isLoading && (
+              <div className="transition-opacity duration-300 ease-in-out opacity-100">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-6 w-6" />
+                  <Skeleton className="h-7 w-48" />
+                </div>
+                <Skeleton className="h-4 w-32 mt-1" />
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
-            <Button onClick={navigateToTable} variant="outline" size="sm">
-              <ExternalLink className="w-4 h-4 mr-2" />
-              View Table
-            </Button>
-            <Button onClick={copyDefinition} variant="outline" size="sm">
-              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-            </Button>
+            {!isLoading && indexDetails && (
+              <>
+                <Button onClick={navigateToTable} variant="outline" size="sm">
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  View Table
+                </Button>
+                <Button onClick={copyDefinition} variant="outline" size="sm">
+                  {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                </Button>
+              </>
+            )}
+            {isLoading && (
+              <>
+                <Skeleton className="h-9 w-24" />
+                <Skeleton className="h-9 w-9" />
+              </>
+            )}
           </div>
         </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-6">
-        <div className="max-w-5xl mx-auto space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Index Information</CardTitle>
-              <CardDescription>Details about the index</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Schema</label>
-                  <p className="text-sm">{indexDetails.schema}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Type</label>
-                  <p className="text-sm">{indexDetails.type}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Table</label>
-                  <Button
-                    variant="link"
-                    className="p-0 h-auto text-sm"
-                    onClick={navigateToTable}
-                  >
-                    {indexDetails.tableSchema}.{indexDetails.tableName}
-                    <ExternalLink className="w-3 h-3 ml-1" />
-                  </Button>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-muted-foreground">Unique</label>
-                  <p className="text-sm">
-                    {indexDetails.unique ? (
-                      <Badge variant="default">Yes</Badge>
-                    ) : (
-                      <Badge variant="secondary">No</Badge>
-                    )}
-                  </p>
-                </div>
-                {indexDetails.size && (
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Size</label>
-                    <p className="text-sm">{indexDetails.size}</p>
-                  </div>
-                )}
-                {indexDetails.indexScans !== undefined && (
-                  <div>
-                    <label className="text-sm font-medium text-muted-foreground">Usage</label>
-                    <p className="text-sm">
-                      {indexDetails.isUsed ? (
-                        <Badge variant="default">
-                          Used ({indexDetails.indexScans} scans)
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary">Not Used</Badge>
+        <div className="max-w-5xl mx-auto space-y-6 relative">
+          {/* Real content */}
+          <div
+            className={cn(
+              "transition-opacity duration-300 ease-in-out",
+              isLoading ? "opacity-0 absolute inset-0 pointer-events-none" : "opacity-100"
+            )}
+          >
+            {indexDetails && (
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Index Information</CardTitle>
+                    <CardDescription>Details about the index</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Schema</label>
+                        <p className="text-sm">{indexDetails.schema}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Type</label>
+                        <p className="text-sm">{indexDetails.type}</p>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Table</label>
+                        <Button
+                          variant="link"
+                          className="p-0 h-auto text-sm"
+                          onClick={navigateToTable}
+                        >
+                          {indexDetails.tableSchema}.{indexDetails.tableName}
+                          <ExternalLink className="w-3 h-3 ml-1" />
+                        </Button>
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-muted-foreground">Unique</label>
+                        <div className="text-sm">
+                          {indexDetails.unique ? (
+                            <Badge variant="default">Yes</Badge>
+                          ) : (
+                            <Badge variant="secondary">No</Badge>
+                          )}
+                        </div>
+                      </div>
+                      {indexDetails.size && (
+                        <div>
+                          <label className="text-sm font-medium text-muted-foreground">Size</label>
+                          <p className="text-sm">{indexDetails.size}</p>
+                        </div>
                       )}
-                    </p>
-                  </div>
-                )}
-                <div className="col-span-2">
-                  <label className="text-sm font-medium text-muted-foreground">Columns</label>
-                  <div className="flex flex-wrap gap-2 mt-1">
-                    {indexDetails.columns.map((col, idx) => (
-                      <Badge key={idx} variant="outline">
-                        {col}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                      {indexDetails.indexScans !== undefined && (
+                        <div>
+                          <label className="text-sm font-medium text-muted-foreground">Usage</label>
+                          <div className="text-sm">
+                            {indexDetails.isUsed ? (
+                              <Badge variant="default">
+                                Used ({indexDetails.indexScans} scans)
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary">Not Used</Badge>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                      <div className="col-span-2">
+                        <label className="text-sm font-medium text-muted-foreground">Columns</label>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {indexDetails.columns.map((col, idx) => (
+                            <Badge key={idx} variant="outline">
+                              {col}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
 
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="flex items-center gap-2">
-                    <Hash className="w-5 h-5" />
-                    Index Definition
-                  </CardTitle>
-                  <CardDescription>The SQL statement that creates this index</CardDescription>
-                </div>
-                <Button onClick={copyDefinition} variant="outline" size="sm">
-                  {copied ? (
-                    <>
-                      <Check className="w-4 h-4 mr-2" />
-                      Copied
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4 mr-2" />
-                      Copy
-                    </>
-                  )}
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <pre className="bg-muted p-4 rounded-md overflow-x-auto text-sm font-mono">
-                {indexDetails.definition}
-              </pre>
-            </CardContent>
-          </Card>
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="flex items-center gap-2">
+                          <Hash className="w-5 h-5" />
+                          Index Definition
+                        </CardTitle>
+                        <CardDescription>The SQL statement that creates this index</CardDescription>
+                      </div>
+                      <Button onClick={copyDefinition} variant="outline" size="sm">
+                        {copied ? (
+                          <>
+                            <Check className="w-4 h-4 mr-2" />
+                            Copied
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-4 h-4 mr-2" />
+                            Copy
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <pre className="bg-muted p-4 rounded-md overflow-x-auto text-sm font-mono">
+                      {indexDetails.definition}
+                    </pre>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </div>
+
+          {/* Ghost loading */}
+          {isLoading && (
+            <div className="transition-opacity duration-300 ease-in-out opacity-100 space-y-6">
+              <Card className="animate-pulse">
+                <CardHeader>
+                  <Skeleton className="h-6 w-40" />
+                  <Skeleton className="h-4 w-48 mt-2" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-16" />
+                      <Skeleton className="h-4 w-24" />
+                    </div>
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-12" />
+                      <Skeleton className="h-4 w-20" />
+                    </div>
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-16" />
+                      <Skeleton className="h-4 w-32" />
+                    </div>
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-16" />
+                      <Skeleton className="h-5 w-12" />
+                    </div>
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-12" />
+                      <Skeleton className="h-4 w-24" />
+                    </div>
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-16" />
+                      <Skeleton className="h-5 w-20" />
+                    </div>
+                    <div className="col-span-2 space-y-2">
+                      <Skeleton className="h-4 w-20" />
+                      <div className="flex flex-wrap gap-2">
+                        <Skeleton className="h-5 w-16" />
+                        <Skeleton className="h-5 w-20" />
+                        <Skeleton className="h-5 w-18" />
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="animate-pulse">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Skeleton className="h-5 w-5" />
+                        <Skeleton className="h-6 w-40" />
+                      </div>
+                      <Skeleton className="h-4 w-64" />
+                    </div>
+                    <Skeleton className="h-9 w-20" />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-48 w-full" />
+                </CardContent>
+              </Card>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -7,9 +7,9 @@ import { BrowserRouter, Routes, Route, useParams } from "react-router-dom";
 import { ConnectionProvider } from "@/contexts/ConnectionContext";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { ErrorBoundary } from "@/components/error/ErrorBoundary";
-import { MainLayout } from "@/components/layout/MainLayout";
+import { AppLayout } from "@/components/layout/AppLayout";
+import { ContentArea } from "@/components/layout/ContentArea";
 import { ThemeProvider } from "@/components/theme";
-import { CommandPalette } from "@/components/keyboard";
 import { SettingsShortcut } from "@/components/keyboard/SettingsShortcut";
 import { logError } from "@/lib/api/errors";
 import { queryConfig } from "@/lib/query/queryConfig";
@@ -20,9 +20,11 @@ const TableViewer = lazy(() => import("./pages/TableViewer"));
 const FunctionViewer = lazy(() => import("./pages/FunctionViewer"));
 const ViewViewer = lazy(() => import("./pages/ViewViewer"));
 const IndexViewer = lazy(() => import("./pages/IndexViewer"));
+const EnumViewer = lazy(() => import("./pages/EnumViewer"));
 const ERDiagram = lazy(() => import("./pages/ERDiagram"));
 const QueryBuilder = lazy(() => import("./pages/QueryBuilder"));
 const IndexRecommendations = lazy(() => import("./pages/IndexRecommendations"));
+const Settings = lazy(() => import("./pages/Settings"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -42,23 +44,16 @@ const queryClient = new QueryClient({
   },
 });
 
-// Loading fallback component
+// Loading fallback component with smooth transition
 const PageLoader = () => (
-  <div className="flex items-center justify-center h-screen">
+  <div className="flex items-center justify-center h-full min-h-[400px] animate-fade-in">
     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
   </div>
 );
 
-// Wrapper component to force remount when tableId changes
+// Wrapper component - no key prop to allow component reuse for smooth transitions
 const TableRouteWrapper = () => {
-  const { tableId } = useParams();
-  return (
-    <MainLayout>
-      <Suspense fallback={<PageLoader />}>
-        <TableViewer key={tableId} />
-      </Suspense>
-    </MainLayout>
-  );
+  return <TableViewer />;
 };
 
 const App = () => (
@@ -80,91 +75,102 @@ const App = () => (
                   v7_relativeSplatPath: true,
                 }}
               >
-              <CommandPalette />
               <SettingsShortcut />
-            <Routes>
-              <Route 
-                path="/" 
-                element={
-                  <Suspense fallback={<PageLoader />}>
-                    <Index />
-                  </Suspense>
-                } 
-              />
-              <Route
-                path="/table/:tableId"
-                element={<TableRouteWrapper />}
-              />
-              <Route
-                path="/function/:functionId"
-                element={
-                  <MainLayout>
-                    <Suspense fallback={<PageLoader />}>
-                      <FunctionViewer />
-                    </Suspense>
-                  </MainLayout>
-                }
-              />
-              <Route
-                path="/view/:viewId"
-                element={
-                  <MainLayout>
-                    <Suspense fallback={<PageLoader />}>
-                      <ViewViewer />
-                    </Suspense>
-                  </MainLayout>
-                }
-              />
-              <Route
-                path="/index/:indexId"
-                element={
-                  <MainLayout>
-                    <Suspense fallback={<PageLoader />}>
-                      <IndexViewer />
-                    </Suspense>
-                  </MainLayout>
-                }
-              />
-              <Route
-                path="/diagram"
-                element={
-                  <MainLayout>
-                    <Suspense fallback={<PageLoader />}>
-                      <ERDiagram />
-                    </Suspense>
-                  </MainLayout>
-                }
-              />
-              <Route
-                path="/query"
-                element={
-                  <MainLayout>
-                    <Suspense fallback={<PageLoader />}>
-                      <QueryBuilder />
-                    </Suspense>
-                  </MainLayout>
-                }
-              />
-              <Route
-                path="/indexes"
-                element={
-                  <MainLayout>
-                    <Suspense fallback={<PageLoader />}>
-                      <IndexRecommendations />
-                    </Suspense>
-                  </MainLayout>
-                }
-              />
-              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-              <Route 
-                path="*" 
-                element={
-                  <Suspense fallback={<PageLoader />}>
-                    <NotFound />
-                  </Suspense>
-                } 
-              />
-            </Routes>
+            <AppLayout>
+              <ContentArea>
+                <Routes>
+                  <Route 
+                    path="/" 
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <Index />
+                      </Suspense>
+                    } 
+                  />
+                  <Route
+                    path="/table/:tableId"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <TableRouteWrapper />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/function/:functionId"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <FunctionViewer />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/view/:viewId"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <ViewViewer />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/index/:indexId"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <IndexViewer />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/enum/:enumId"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <EnumViewer />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/diagram"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <ERDiagram />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/query"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <QueryBuilder />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/indexes"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <IndexRecommendations />
+                      </Suspense>
+                    }
+                  />
+                  <Route
+                    path="/settings"
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <Settings />
+                      </Suspense>
+                    }
+                  />
+                  {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+                  <Route 
+                    path="*" 
+                    element={
+                      <Suspense fallback={<PageLoader />}>
+                        <NotFound />
+                      </Suspense>
+                    } 
+                  />
+                </Routes>
+              </ContentArea>
+            </AppLayout>
             </BrowserRouter>
           </TooltipProvider>
           </SettingsProvider>

@@ -15,6 +15,8 @@ import type {
   FunctionDetails,
   ViewDetails,
   IndexDetails,
+  DatabaseEnum,
+  EnumDetails,
 } from '../types';
 
 export const schemasService = {
@@ -216,6 +218,29 @@ export const schemasService = {
   ): Promise<IndexDetails> {
     return apiClient.get<IndexDetails>(
       `connections/${connectionId}/db/indexes/${encodeURIComponent(schema)}/${encodeURIComponent(indexName)}`,
+    );
+  },
+
+  /**
+   * Get all enums for a connection (optionally filtered by schema)
+   * GET /api/connections/:connectionId/db/enums?schema=public
+   */
+  async getEnums(connectionId: string, schema?: string): Promise<DatabaseEnum[]> {
+    const queryParams = schema ? `?schema=${encodeURIComponent(schema)}` : '';
+    return apiClient.get<DatabaseEnum[]>(`connections/${connectionId}/db/enums${queryParams}`);
+  },
+
+  /**
+   * Get enum details
+   * GET /api/connections/:connectionId/db/enums/:schema/:enumName
+   */
+  async getEnumDetails(
+    connectionId: string,
+    schema: string,
+    enumName: string,
+  ): Promise<EnumDetails> {
+    return apiClient.get<EnumDetails>(
+      `connections/${connectionId}/db/enums/${encodeURIComponent(schema)}/${encodeURIComponent(enumName)}`,
     );
   },
 };

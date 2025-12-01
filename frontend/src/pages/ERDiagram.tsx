@@ -35,7 +35,11 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { FlowTableNode, TableNodeData } from "@/components/diagram/FlowTableNode";
+import { CustomEdge } from "@/components/diagram/CustomEdge";
 import { DiagramFilters } from "@/components/diagram/DiagramFilters";
 import { RelationshipPopup } from "@/components/diagram/RelationshipPopup";
 import { toast } from "sonner";
@@ -53,10 +57,53 @@ import { useQuery } from "@tanstack/react-query";
 import { useConnection } from "@/contexts/ConnectionContext";
 import { diagramService, schemasService } from "@/lib/api";
 import type { DiagramNode, DiagramEdge, Table } from "@/lib/api/types";
+import { Handle, Position, NodeProps } from "reactflow";
+import { GripVertical } from "lucide-react";
+
+// Ghost table node component for loading state
+const GhostTableNode = ({ data }: NodeProps) => {
+  return (
+    <>
+      {/* Connection handles */}
+      <Handle type="target" position={Position.Left} className="!bg-primary/30 !w-3 !h-3 opacity-50" />
+      <Handle type="source" position={Position.Right} className="!bg-primary/30 !w-3 !h-3 opacity-50" />
+
+      <Card className="w-80 shadow-lg animate-pulse opacity-60 border-primary/20">
+        <CardHeader className="pb-3 bg-primary/5 border-b border-border">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <GripVertical className="w-4 h-4 text-muted-foreground/50" />
+              <Skeleton className="h-5 w-32" />
+            </div>
+            <Skeleton className="h-4 w-12" />
+          </div>
+          <Skeleton className="h-3 w-24 mt-2" />
+        </CardHeader>
+        <CardContent className="pt-3 pb-3">
+          <div className="space-y-1.5">
+            {Array.from({ length: 6 }).map((_, idx) => (
+              <div key={`ghost-col-${idx}`} className="flex items-center gap-2 py-1 px-2">
+                <Skeleton className="w-1.5 h-1.5 rounded-full" />
+                <Skeleton className="h-3 flex-1" />
+                <Skeleton className="h-3 w-16" />
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
+};
 
 // Default node types
 const nodeTypes = {
   tableNode: FlowTableNode,
+};
+
+// Default edge types
+const edgeTypes = {
+  customEdge: CustomEdge,
+  smoothstep: CustomEdge, // Use custom edge for smoothstep too
 };
 
 // Separate component for fullscreen view to avoid ReactFlow context conflicts
@@ -110,17 +157,25 @@ const FullscreenDiagramView = ({
       onNodeClick={onNodeClick}
       onPaneClick={onPaneClick}
       nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
       connectionLineType={ConnectionLineType.SmoothStep}
       fitView
       minZoom={0.1}
       maxZoom={2}
       defaultEdgeOptions={{
-        type: "smoothstep",
+        type: "customEdge",
         animated: false,
       }}
       proOptions={{ hideAttribution: true }}
+      style={{ background: "hsl(var(--background))" }}
     >
-      <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
+      <Background 
+        variant={BackgroundVariant.Dots} 
+        gap={20} 
+        size={1}
+        bgColor="hsl(var(--background))"
+        color="hsl(var(--primary) / 0.2)"
+      />
       <Controls showInteractive={false} />
       <MiniMap
         nodeColor={(node) => {
@@ -251,19 +306,37 @@ const ERDiagramContent = () => {
       id: apiEdge.id,
       source: apiEdge.source,
       target: apiEdge.target,
-      type: apiEdge.type || "smoothstep",
+      type: "customEdge", // Use custom edge type for proper label rendering
       animated: apiEdge.animated || false,
       label: apiEdge.label,
-      labelStyle: apiEdge.labelStyle || { fontSize: 10, fontWeight: 500 },
+      data: {
+        label: apiEdge.label, // Pass label in data for CustomEdge
+        isHighlighted: false, // Will be updated by highlight logic
+      },
+      labelStyle: {
+        fontSize: 10,
+        fontWeight: 500,
+        ...(apiEdge.labelStyle || {}),
+      },
       style: {
+        // Always use theme colors, ignore any hardcoded colors from API
         stroke: "hsl(var(--primary))",
         strokeWidth: 2,
         opacity: 0.6,
-        ...apiEdge.style,
+        // Only preserve non-color properties from API style
+        ...(apiEdge.style ? Object.fromEntries(
+          Object.entries(apiEdge.style).filter(([key]) => 
+            !['stroke', 'color', 'fill', 'backgroundColor'].includes(key)
+          )
+        ) : {}),
       },
-      markerEnd: apiEdge.markerEnd || {
+      markerEnd: {
         type: MarkerType.ArrowClosed,
         color: "hsl(var(--primary))",
+        // Override any hardcoded colors from API
+        ...(apiEdge.markerEnd ? Object.fromEntries(
+          Object.entries(apiEdge.markerEnd).filter(([key]) => key !== 'color')
+        ) : {}),
       },
     }));
   }, [diagramData]);
@@ -475,6 +548,10 @@ const ERDiagramContent = () => {
         eds.map((edge) => ({
           ...edge,
           animated: false,
+          data: {
+            ...edge.data,
+            isHighlighted: false,
+          },
           style: { ...edge.style, strokeWidth: 2, opacity: 0.6 },
         }))
       );
@@ -511,6 +588,10 @@ const ERDiagramContent = () => {
       eds.map((edge) => ({
         ...edge,
         animated: connectedEdges.has(edge.id),
+        data: {
+          ...edge.data,
+          isHighlighted: connectedEdges.has(edge.id),
+        },
         style: {
           ...edge.style,
           strokeWidth: connectedEdges.has(edge.id) ? 3 : 2,
@@ -719,7 +800,7 @@ const ERDiagramContent = () => {
       
       // Export as SVG first (which we know works and captures everything)
       const svgDataUrl = await toSvg(targetElement, {
-        backgroundColor: "white",
+        backgroundColor: "hsl(0, 0%, 2%)", // Terminal dark background
         quality: 1.0,
         filter: (node) => {
           if (node.classList?.contains("react-flow__controls")) return false;
@@ -793,8 +874,8 @@ const ERDiagramContent = () => {
         throw new Error('Could not get canvas context');
       }
       
-      // Fill the ENTIRE canvas with white background first
-      ctx.fillStyle = 'white';
+      // Fill the ENTIRE canvas with dark background first
+      ctx.fillStyle = 'hsl(0, 0%, 2%)'; // Terminal dark background
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       
       // Draw the SVG image at full size
@@ -909,7 +990,7 @@ const ERDiagramContent = () => {
 
       // SVG is vectorized, so it scales perfectly at any zoom level
       const dataUrl = await toSvg(targetElement, {
-        backgroundColor: "white",
+        backgroundColor: "hsl(0, 0%, 2%)", // Terminal dark background
         quality: 1.0,
         filter: (node) => {
           // Exclude controls and other UI elements
@@ -1022,7 +1103,7 @@ const ERDiagramContent = () => {
 
       // Use SVG export method for consistent full diagram capture
       const svgDataUrl = await toSvg(targetElement, {
-        backgroundColor: "white",
+        backgroundColor: "hsl(0, 0%, 2%)", // Terminal dark background
         quality: 1.0,
         filter: (node) => {
           if (node.classList?.contains("react-flow__controls")) return false;
@@ -1086,7 +1167,7 @@ const ERDiagramContent = () => {
         throw new Error('Could not get canvas context');
       }
 
-      ctx.fillStyle = 'white';
+      ctx.fillStyle = 'hsl(0, 0%, 2%)'; // Terminal dark background
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
@@ -1182,7 +1263,7 @@ const ERDiagramContent = () => {
       await new Promise(resolve => setTimeout(resolve, 200));
 
       const dataUrl = await toSvg(targetElement, {
-        backgroundColor: "white",
+        backgroundColor: "hsl(0, 0%, 2%)", // Terminal dark background
         quality: 1.0,
         filter: (node) => {
           if (node.classList?.contains("react-flow__controls")) return false;
@@ -1252,6 +1333,7 @@ const ERDiagramContent = () => {
 
   // Use stable node types - expanded state is passed through node data
   const memoizedNodeTypes = useMemo(() => nodeTypes, []);
+  const memoizedEdgeTypes = useMemo(() => edgeTypes, []);
 
   // Keyboard shortcut for search (Ctrl+K / Cmd+K)
   useEffect(() => {
@@ -1516,13 +1598,6 @@ const ERDiagramContent = () => {
               <p className="text-sm mt-1">Select at least one schema to view the diagram</p>
             </div>
           </div>
-        ) : isLoading ? (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center">
-              <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-primary" />
-              <p className="text-muted-foreground">Loading diagram...</p>
-            </div>
-          </div>
         ) : hasError ? (
           <div className="absolute inset-0 flex items-center justify-center">
             <div className="text-center text-destructive">
@@ -1544,16 +1619,25 @@ const ERDiagramContent = () => {
               </Button>
             </div>
           </div>
-        ) : nodes.length === 0 ? (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="text-center text-muted-foreground">
-              <Layers className="w-16 h-16 mx-auto mb-4 opacity-20" />
-              <p className="text-lg font-semibold">No tables found</p>
-              <p className="text-sm mt-1">No tables match the selected filters</p>
-            </div>
-          </div>
         ) : (
-          <ReactFlow
+          <div className="relative w-full h-full">
+            {/* Real ReactFlow with fade transition */}
+            <div
+              className={cn(
+                "transition-opacity duration-300 ease-in-out w-full h-full",
+                isLoading ? "opacity-0 absolute inset-0 pointer-events-none" : "opacity-100"
+              )}
+            >
+              {nodes.length === 0 ? (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-center text-muted-foreground">
+                    <Layers className="w-16 h-16 mx-auto mb-4 opacity-20" />
+                    <p className="text-lg font-semibold">No tables found</p>
+                    <p className="text-sm mt-1">No tables match the selected filters</p>
+                  </div>
+                </div>
+              ) : (
+                <ReactFlow
             nodes={nodes}
             edges={visibleEdges}
             onNodesChange={onNodesChange}
@@ -1563,17 +1647,25 @@ const ERDiagramContent = () => {
             onNodeClick={onNodeClick}
             onPaneClick={onPaneClick}
             nodeTypes={memoizedNodeTypes}
+            edgeTypes={memoizedEdgeTypes}
             connectionLineType={ConnectionLineType.SmoothStep}
             fitView
             minZoom={0.1}
             maxZoom={2}
             defaultEdgeOptions={{
-              type: "smoothstep",
+              type: "customEdge",
               animated: false,
             }}
             proOptions={{ hideAttribution: true }}
+            style={{ background: "hsl(var(--background))" }}
           >
-          <Background variant={BackgroundVariant.Dots} gap={20} size={1} />
+          <Background 
+        variant={BackgroundVariant.Dots} 
+        gap={20} 
+        size={1}
+        bgColor="hsl(var(--background))"
+        color="hsl(var(--primary) / 0.2)"
+      />
           <Controls showInteractive={false} />
           <MiniMap
             nodeColor={(node) => {
@@ -1601,7 +1693,126 @@ const ERDiagramContent = () => {
               </div>
             </div>
           </Panel>
-        </ReactFlow>
+                </ReactFlow>
+              )}
+            </div>
+            {/* Ghost loading for diagram - mimics actual ER diagram layout */}
+            {isLoading && (
+              <div className="transition-opacity duration-300 ease-in-out opacity-100 absolute inset-0">
+                <ReactFlow
+                  nodes={[
+                    // More organic layout that looks like a real ER diagram
+                    { id: 'ghost-1', type: 'ghostTableNode', position: { x: 150, y: 150 }, data: {} },
+                    { id: 'ghost-2', type: 'ghostTableNode', position: { x: 550, y: 100 }, data: {} },
+                    { id: 'ghost-3', type: 'ghostTableNode', position: { x: 950, y: 150 }, data: {} },
+                    { id: 'ghost-4', type: 'ghostTableNode', position: { x: 200, y: 450 }, data: {} },
+                    { id: 'ghost-5', type: 'ghostTableNode', position: { x: 600, y: 500 }, data: {} },
+                    { id: 'ghost-6', type: 'ghostTableNode', position: { x: 1000, y: 450 }, data: {} },
+                    { id: 'ghost-7', type: 'ghostTableNode', position: { x: 150, y: 750 }, data: {} },
+                    { id: 'ghost-8', type: 'ghostTableNode', position: { x: 550, y: 800 }, data: {} },
+                    { id: 'ghost-9', type: 'ghostTableNode', position: { x: 950, y: 750 }, data: {} },
+                  ]}
+                  edges={[
+                    { 
+                      id: 'ghost-edge-1', 
+                      source: 'ghost-1', 
+                      target: 'ghost-2', 
+                      type: 'smoothstep', 
+                      animated: false, 
+                      style: { stroke: 'hsl(var(--primary))', strokeWidth: 2, opacity: 0.3 },
+                      markerEnd: { type: MarkerType.ArrowClosed, color: 'hsl(var(--primary))', width: 20, height: 20 },
+                    },
+                    { 
+                      id: 'ghost-edge-2', 
+                      source: 'ghost-2', 
+                      target: 'ghost-3', 
+                      type: 'smoothstep', 
+                      animated: false, 
+                      style: { stroke: 'hsl(var(--primary))', strokeWidth: 2, opacity: 0.3 },
+                      markerEnd: { type: MarkerType.ArrowClosed, color: 'hsl(var(--primary))', width: 20, height: 20 },
+                    },
+                    { 
+                      id: 'ghost-edge-3', 
+                      source: 'ghost-1', 
+                      target: 'ghost-4', 
+                      type: 'smoothstep', 
+                      animated: false, 
+                      style: { stroke: 'hsl(var(--primary))', strokeWidth: 2, opacity: 0.3 },
+                      markerEnd: { type: MarkerType.ArrowClosed, color: 'hsl(var(--primary))', width: 20, height: 20 },
+                    },
+                    { 
+                      id: 'ghost-edge-4', 
+                      source: 'ghost-4', 
+                      target: 'ghost-5', 
+                      type: 'smoothstep', 
+                      animated: false, 
+                      style: { stroke: 'hsl(var(--primary))', strokeWidth: 2, opacity: 0.3 },
+                      markerEnd: { type: MarkerType.ArrowClosed, color: 'hsl(var(--primary))', width: 20, height: 20 },
+                    },
+                    { 
+                      id: 'ghost-edge-5', 
+                      source: 'ghost-5', 
+                      target: 'ghost-6', 
+                      type: 'smoothstep', 
+                      animated: false, 
+                      style: { stroke: 'hsl(var(--primary))', strokeWidth: 2, opacity: 0.3 },
+                      markerEnd: { type: MarkerType.ArrowClosed, color: 'hsl(var(--primary))', width: 20, height: 20 },
+                    },
+                    { 
+                      id: 'ghost-edge-6', 
+                      source: 'ghost-4', 
+                      target: 'ghost-7', 
+                      type: 'smoothstep', 
+                      animated: false, 
+                      style: { stroke: 'hsl(var(--primary))', strokeWidth: 2, opacity: 0.3 },
+                      markerEnd: { type: MarkerType.ArrowClosed, color: 'hsl(var(--primary))', width: 20, height: 20 },
+                    },
+                    { 
+                      id: 'ghost-edge-7', 
+                      source: 'ghost-7', 
+                      target: 'ghost-8', 
+                      type: 'smoothstep', 
+                      animated: false, 
+                      style: { stroke: 'hsl(var(--primary))', strokeWidth: 2, opacity: 0.3 },
+                      markerEnd: { type: MarkerType.ArrowClosed, color: 'hsl(var(--primary))', width: 20, height: 20 },
+                    },
+                    { 
+                      id: 'ghost-edge-8', 
+                      source: 'ghost-2', 
+                      target: 'ghost-5', 
+                      type: 'smoothstep', 
+                      animated: false, 
+                      style: { stroke: 'hsl(var(--accent))', strokeWidth: 2, opacity: 0.25 },
+                      markerEnd: { type: MarkerType.ArrowClosed, color: 'hsl(var(--accent))', width: 20, height: 20 },
+                    },
+                  ]}
+                  nodeTypes={{ ghostTableNode: GhostTableNode }}
+                  edgeTypes={edgeTypes}
+                  connectionLineType={ConnectionLineType.SmoothStep}
+                  fitView
+                  minZoom={0.1}
+                  maxZoom={2}
+                  defaultEdgeOptions={{
+                    type: "customEdge",
+                    animated: false,
+                  }}
+                  proOptions={{ hideAttribution: true }}
+                  nodesDraggable={false}
+                  nodesConnectable={false}
+                  elementsSelectable={false}
+                  style={{ background: "hsl(var(--background))" }}
+                >
+                  <Background 
+        variant={BackgroundVariant.Dots} 
+        gap={20} 
+        size={1}
+        bgColor="hsl(var(--background))"
+        color="hsl(var(--primary) / 0.2)"
+      />
+                </ReactFlow>
+              </div>
+            )}
+          </div>
         )}
       </div>
 

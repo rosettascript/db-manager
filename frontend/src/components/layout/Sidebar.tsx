@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
@@ -16,11 +16,12 @@ import {
   FunctionSquare,
   Eye,
   Hash,
+  List,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useConnection } from "@/contexts/ConnectionContext";
 import { schemasService } from "@/lib/api/services/schemas.service";
-import type { Schema, Table, DatabaseFunction, DatabaseView, DatabaseIndex } from "@/lib/api/types";
+import type { Schema, Table, DatabaseFunction, DatabaseView, DatabaseIndex, DatabaseEnum } from "@/lib/api/types";
 import { NavLink } from "@/components/NavLink";
 import {
   ContextMenu,
@@ -33,14 +34,42 @@ import { DeleteTableDialog } from "@/components/schema-management/DeleteTableDia
 import { DeleteSchemaDialog } from "@/components/schema-management/DeleteSchemaDialog";
 import { toast } from "sonner";
 
+// Helper functions to persist expanded state
+const loadExpandedState = (key: string, defaultValue: Set<string>): Set<string> => {
+  try {
+    const stored = localStorage.getItem(`sidebar-expanded-${key}`);
+    if (stored) {
+      const parsed = JSON.parse(stored);
+      return new Set(parsed);
+    }
+  } catch (e) {
+    // Ignore errors
+  }
+  return defaultValue;
+};
+
+const saveExpandedState = (key: string, value: Set<string>) => {
+  try {
+    localStorage.setItem(`sidebar-expanded-${key}`, JSON.stringify(Array.from(value)));
+  } catch (e) {
+    // Ignore errors
+  }
+};
+
 export const Sidebar = () => {
   const { activeConnection } = useConnection();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const location = useLocation();
-  const [expandedSchemas, setExpandedSchemas] = useState<Set<string>>(new Set(["public"]));
-  const [expandedTables, setExpandedTables] = useState<Set<string>>(new Set());
-  const [expandedObjectTypes, setExpandedObjectTypes] = useState<Set<string>>(new Set());
+  const [expandedSchemas, setExpandedSchemas] = useState<Set<string>>(() => 
+    loadExpandedState('schemas', new Set(["public"]))
+  );
+  const [expandedTables, setExpandedTables] = useState<Set<string>>(() => 
+    loadExpandedState('tables', new Set())
+  );
+  const [expandedObjectTypes, setExpandedObjectTypes] = useState<Set<string>>(() => 
+    loadExpandedState('objectTypes', new Set())
+  );
   const [functionCategoryFilter, setFunctionCategoryFilter] = useState<'user' | 'all'>('user');
   
   // Delete dialog state
@@ -132,6 +161,17 @@ export const Sidebar = () => {
     staleTime: 60000,
   });
 
+  // Fetch enums
+  const {
+    data: enums = [],
+    isLoading: enumsLoading,
+  } = useQuery<DatabaseEnum[]>({
+    queryKey: ['enums', activeConnection?.id],
+    queryFn: () => schemasService.getEnums(activeConnection!.id),
+    enabled: !!activeConnection && activeConnection.status === 'connected',
+    staleTime: 60000,
+  });
+
   // Group all objects by schema
   const schemasWithObjects = useMemo(() => {
     if (!schemas.length) return [];
@@ -151,11 +191,96 @@ export const Sidebar = () => {
         systemFunctions,
         views: views.filter((view) => view.schema === schema.name),
         indexes: indexes.filter((idx) => idx.schema === schema.name),
+        enums: enums.filter((enumType) => enumType.schema === schema.name),
       };
     });
-  }, [schemas, tables, functions, views, indexes]);
+  }, [schemas, tables, functions, views, indexes, enums]);
 
-  const isLoading = schemasLoading || tablesLoading || functionsLoading || viewsLoading || indexesLoading;
+  const isLoading = schemasLoading || tablesLoading || functionsLoading || viewsLoading || indexesLoading || enumsLoading;
+
+  // Auto-expand schema and object type based on current route
+  useEffect(() => {
+    if (!location.pathname || isLoading || !schemas.length) return;
+
+    const path = location.pathname;
+    
+    // Extract schema and object type from route
+    let schema: string | null = null;
+    let objectType: string | null = null;
+
+    if (path.startsWith('/table/')) {
+      const tableId = path.split('/table/')[1];
+      if (tableId) {
+        const parts = tableId.split('.');
+        if (parts.length >= 2) {
+          schema = parts[0];
+          objectType = 'tables';
+        }
+      }
+    } else if (path.startsWith('/function/')) {
+      const functionId = path.split('/function/')[1];
+      if (functionId) {
+        const match = functionId.match(/^([^.]+)\./);
+        if (match) {
+          schema = match[1];
+          objectType = 'functions';
+        }
+      }
+    } else if (path.startsWith('/view/')) {
+      const viewId = path.split('/view/')[1];
+      if (viewId) {
+        const parts = viewId.split('.');
+        if (parts.length >= 2) {
+          schema = parts[0];
+          objectType = 'views';
+        }
+      }
+    } else if (path.startsWith('/index/')) {
+      const indexId = path.split('/index/')[1];
+      if (indexId) {
+        const parts = indexId.split('.');
+        if (parts.length >= 2) {
+          schema = parts[0];
+          objectType = 'indexes';
+        }
+      }
+    } else if (path.startsWith('/enum/')) {
+      const enumId = path.split('/enum/')[1];
+      if (enumId) {
+        const parts = enumId.split('.');
+        if (parts.length >= 2) {
+          schema = parts[0];
+          objectType = 'enums';
+        }
+      }
+    }
+
+    // Auto-expand if we found a schema and object type
+    if (schema && objectType && schemas.some(s => s.name === schema)) {
+      // Expand schema
+      setExpandedSchemas(prev => {
+        const newSet = new Set(prev);
+        if (!newSet.has(schema!)) {
+          newSet.add(schema!);
+          saveExpandedState('schemas', newSet);
+          return newSet;
+        }
+        return prev;
+      });
+
+      // Expand object type
+      const objectTypeKey = `${schema}-${objectType}`;
+      setExpandedObjectTypes(prev => {
+        const newSet = new Set(prev);
+        if (!newSet.has(objectTypeKey)) {
+          newSet.add(objectTypeKey);
+          saveExpandedState('objectTypes', newSet);
+          return newSet;
+        }
+        return prev;
+      });
+    }
+  }, [location.pathname, isLoading, schemas]);
 
   const toggleSchema = (schemaName: string) => {
     const newExpanded = new Set(expandedSchemas);
@@ -165,6 +290,7 @@ export const Sidebar = () => {
       newExpanded.add(schemaName);
     }
     setExpandedSchemas(newExpanded);
+    saveExpandedState('schemas', newExpanded);
   };
 
   const toggleTable = (tableName: string) => {
@@ -175,6 +301,7 @@ export const Sidebar = () => {
       newExpanded.add(tableName);
     }
     setExpandedTables(newExpanded);
+    saveExpandedState('tables', newExpanded);
   };
 
   const toggleObjectType = (key: string) => {
@@ -185,6 +312,7 @@ export const Sidebar = () => {
       newExpanded.add(key);
     }
     setExpandedObjectTypes(newExpanded);
+    saveExpandedState('objectTypes', newExpanded);
   };
 
   // Handle table deletion
@@ -274,6 +402,7 @@ export const Sidebar = () => {
       queryClient.invalidateQueries({ queryKey: ['functions', activeConnection?.id] });
       queryClient.invalidateQueries({ queryKey: ['views', activeConnection?.id] });
       queryClient.invalidateQueries({ queryKey: ['indexes', activeConnection?.id] });
+      queryClient.invalidateQueries({ queryKey: ['enums', activeConnection?.id] });
       
       // Navigate away if we're viewing a table in the deleted schema
       const currentTableId = location.pathname.split('/table/')[1];
@@ -349,12 +478,13 @@ export const Sidebar = () => {
             </div>
           ) : (
             schemasWithObjects.map((schema) => {
-              const totalObjects = schema.tables.length + schema.functions.length + schema.views.length + schema.indexes.length;
+              const totalObjects = schema.tables.length + schema.functions.length + schema.views.length + schema.indexes.length + schema.enums.length;
               const schemaKey = schema.name;
               const tablesKey = `${schemaKey}-tables`;
               const functionsKey = `${schemaKey}-functions`;
               const viewsKey = `${schemaKey}-views`;
               const indexesKey = `${schemaKey}-indexes`;
+              const enumsKey = `${schemaKey}-enums`;
 
               return (
                 <div key={schema.name} className="mb-2">
@@ -415,17 +545,23 @@ export const Sidebar = () => {
                                     <div
                                       style={{ animation: `fade-in 0.2s ease-out ${idx * 0.05}s both` }}
                                     >
-                                      <NavLink
-                                        to={`/table/${table.id}`}
-                                        className="flex items-center gap-1.5 px-2 py-1 text-sm hover:bg-sidebar-accent rounded-md transition-colors"
-                                        activeClassName="bg-sidebar-accent"
+                                      <button
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          navigate(`/table/${table.id}`);
+                                        }}
+                                        className={cn(
+                                          "flex items-center gap-1.5 px-2 py-1 text-sm hover:bg-sidebar-accent rounded-md transition-colors w-full text-left",
+                                          location.pathname === `/table/${table.id}` && "bg-sidebar-accent"
+                                        )}
                                       >
                                         <Table2 className="w-3 h-3" />
                                         <span className="flex-1 truncate">{table.name}</span>
                                         <span className="text-xs text-muted-foreground">
                                           {table.rowCount.toLocaleString()}
                                         </span>
-                                      </NavLink>
+                                      </button>
                                     </div>
                                   </ContextMenuTrigger>
                                   <ContextMenuContent>
@@ -483,12 +619,18 @@ export const Sidebar = () => {
                           {expandedObjectTypes.has(functionsKey) && (
                             <div className="ml-4 mt-0.5 space-y-0.5">
                               {schema.functions.map((func, idx) => (
-                                <NavLink
+                                <button
                                   key={func.id}
-                                  to={`/function/${func.id}`}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    navigate(`/function/${func.id}`);
+                                  }}
                                   style={{ animation: `fade-in 0.2s ease-out ${idx * 0.05}s both` }}
-                                  className="flex items-center gap-1.5 px-2 py-1 text-sm hover:bg-sidebar-accent rounded-md transition-colors"
-                                  activeClassName="bg-sidebar-accent"
+                                  className={cn(
+                                    "flex items-center gap-1.5 px-2 py-1 text-sm hover:bg-sidebar-accent rounded-md transition-colors w-full text-left",
+                                    location.pathname.startsWith(`/function/${func.id}`) && "bg-sidebar-accent"
+                                  )}
                                   title={`${func.name}(${func.parameters}) → ${func.returnType}${func.extensionName ? ` [Extension: ${func.extensionName}]` : func.category === 'system' ? ' [System]' : ''}`}
                                 >
                                   <FunctionSquare className="w-3 h-3" />
@@ -503,7 +645,7 @@ export const Sidebar = () => {
                                       sys
                                     </span>
                                   )}
-                                </NavLink>
+                                </button>
                               ))}
                             </div>
                           )}
@@ -528,16 +670,22 @@ export const Sidebar = () => {
                           {expandedObjectTypes.has(viewsKey) && (
                             <div className="ml-4 mt-0.5 space-y-0.5">
                               {schema.views.map((view, idx) => (
-                                <NavLink
+                                <button
                                   key={view.id}
-                                  to={`/view/${view.id}`}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    navigate(`/view/${view.id}`);
+                                  }}
                                   style={{ animation: `fade-in 0.2s ease-out ${idx * 0.05}s both` }}
-                                  className="flex items-center gap-1.5 px-2 py-1 text-sm hover:bg-sidebar-accent rounded-md transition-colors"
-                                  activeClassName="bg-sidebar-accent"
+                                  className={cn(
+                                    "flex items-center gap-1.5 px-2 py-1 text-sm hover:bg-sidebar-accent rounded-md transition-colors w-full text-left",
+                                    location.pathname === `/view/${view.id}` && "bg-sidebar-accent"
+                                  )}
                                 >
                                   <Eye className="w-3 h-3" />
                                   <span className="flex-1 truncate">{view.name}</span>
-                                </NavLink>
+                                </button>
                               ))}
                             </div>
                           )}
@@ -562,12 +710,18 @@ export const Sidebar = () => {
                           {expandedObjectTypes.has(indexesKey) && (
                             <div className="ml-4 mt-0.5 space-y-0.5">
                               {schema.indexes.map((index, idx) => (
-                                <NavLink
+                                <button
                                   key={index.id}
-                                  to={`/index/${index.id}`}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    navigate(`/index/${index.id}`);
+                                  }}
                                   style={{ animation: `fade-in 0.2s ease-out ${idx * 0.05}s both` }}
-                                  className="flex items-center gap-1.5 px-2 py-1 text-sm hover:bg-sidebar-accent rounded-md transition-colors"
-                                  activeClassName="bg-sidebar-accent"
+                                  className={cn(
+                                    "flex items-center gap-1.5 px-2 py-1 text-sm hover:bg-sidebar-accent rounded-md transition-colors w-full text-left",
+                                    location.pathname === `/index/${index.id}` && "bg-sidebar-accent"
+                                  )}
                                   title={`${index.tableSchema}.${index.tableName} (${index.columns.join(', ')})`}
                                 >
                                   <Hash className="w-3 h-3" />
@@ -575,7 +729,51 @@ export const Sidebar = () => {
                                   {index.unique && (
                                     <span className="text-xs text-muted-foreground">U</span>
                                   )}
-                                </NavLink>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Enums */}
+                      {schema.enums.length > 0 && (
+                        <div>
+                          <button
+                            onClick={() => toggleObjectType(enumsKey)}
+                            className="flex items-center gap-1 w-full px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+                          >
+                            {expandedObjectTypes.has(enumsKey) ? (
+                              <ChevronDown className="w-3 h-3" />
+                            ) : (
+                              <ChevronRight className="w-3 h-3" />
+                            )}
+                            <List className="w-3 h-3" />
+                            <span>Enums ({schema.enums.length})</span>
+                          </button>
+                          {expandedObjectTypes.has(enumsKey) && (
+                            <div className="ml-4 mt-0.5 space-y-0.5">
+                              {schema.enums.map((enumType, idx) => (
+                                <button
+                                  key={enumType.id}
+                                  onClick={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    navigate(`/enum/${enumType.id}`);
+                                  }}
+                                  style={{ animation: `fade-in 0.2s ease-out ${idx * 0.05}s both` }}
+                                  className={cn(
+                                    "flex items-center gap-1.5 px-2 py-1 text-sm hover:bg-sidebar-accent rounded-md transition-colors w-full text-left",
+                                    location.pathname === `/enum/${enumType.id}` && "bg-sidebar-accent"
+                                  )}
+                                  title={`${enumType.values.length} values: ${enumType.values.slice(0, 3).join(', ')}${enumType.values.length > 3 ? '...' : ''}`}
+                                >
+                                  <List className="w-3 h-3" />
+                                  <span className="flex-1 truncate">{enumType.name}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    {enumType.values.length}
+                                  </span>
+                                </button>
                               ))}
                             </div>
                           )}

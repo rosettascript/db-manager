@@ -2,105 +2,82 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 @layer base {
   :root {
-    --background: 216 20% 98%;
-    --foreground: 215 25% 15%;
+    /* Terminal/Hacker Theme - Deep black with Matrix green */
+    --background: 0 0% 2%;
+    --foreground: 120 100% 85%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 215 25% 15%;
+    --card: 0 0% 4%;
+    --card-foreground: 120 100% 85%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 215 25% 15%;
+    --popover: 0 0% 4%;
+    --popover-foreground: 120 100% 85%;
 
-    --primary: 210 95% 48%;
-    --primary-foreground: 0 0% 100%;
+    /* Matrix green primary */
+    --primary: 120 100% 50%;
+    --primary-foreground: 0 0% 0%;
 
-    --secondary: 214 15% 92%;
-    --secondary-foreground: 215 25% 15%;
+    --secondary: 0 0% 8%;
+    --secondary-foreground: 120 100% 85%;
 
-    --muted: 214 15% 94%;
-    --muted-foreground: 215 15% 45%;
+    --muted: 0 0% 6%;
+    --muted-foreground: 120 30% 45%;
 
-    --accent: 188 90% 45%;
-    --accent-foreground: 0 0% 100%;
+    /* Amber accent */
+    --accent: 45 100% 50%;
+    --accent-foreground: 0 0% 0%;
 
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 100% 50%;
+    --destructive-foreground: 120 100% 85%;
 
-    --border: 214 20% 88%;
-    --input: 214 20% 90%;
-    --ring: 210 95% 48%;
+    --success: 120 100% 50%;
+    --success-foreground: 0 0% 0%;
 
-    --radius: 0.5rem;
+    --warning: 45 100% 50%;
+    --warning-foreground: 0 0% 0%;
 
-    --sidebar-background: 215 25% 97%;
-    --sidebar-foreground: 215 20% 25%;
-    --sidebar-primary: 210 95% 48%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 214 15% 92%;
-    --sidebar-accent-foreground: 215 25% 15%;
-    --sidebar-border: 214 20% 88%;
-    --sidebar-ring: 210 95% 48%;
+    --info: 180 100% 50%;
+    --info-foreground: 0 0% 0%;
 
-    /* Custom tokens for DB Visualizer */
-    --table-header: 215 25% 97%;
-    --table-row-hover: 210 95% 96%;
-    --code-bg: 215 25% 95%;
-    --success: 142 76% 36%;
-    --warning: 38 92% 50%;
-    --info: 210 95% 48%;
-  }
+    --border: 120 100% 25%;
+    --input: 0 0% 6%;
+    --ring: 120 100% 50%;
+    --ring-offset: 0 0% 2%;
 
-  .dark {
-    --background: 222 47% 11%;
-    --foreground: 210 40% 96%;
+    --radius: 0;
 
-    --card: 224 44% 14%;
-    --card-foreground: 210 40% 96%;
+    /* Sidebar */
+    --sidebar-background: 0 0% 2%;
+    --sidebar-foreground: 120 100% 85%;
+    --sidebar-primary: 120 100% 50%;
+    --sidebar-primary-foreground: 0 0% 0%;
+    --sidebar-accent: 0 0% 6%;
+    --sidebar-accent-foreground: 120 100% 85%;
+    --sidebar-border: 120 100% 20%;
+    --sidebar-ring: 120 100% 50%;
 
-    --popover: 224 44% 14%;
-    --popover-foreground: 210 40% 96%;
+    /* Code/data specific colors */
+    --code-bg: 0 0% 0%;
+    --code-border: 120 100% 20%;
+    
+    /* Syntax highlighting */
+    --syntax-keyword: 120 100% 50%;
+    --syntax-string: 45 100% 50%;
+    --syntax-number: 180 100% 50%;
+    --syntax-comment: 120 30% 35%;
+    --syntax-function: 120 100% 70%;
+    --syntax-variable: 120 100% 85%;
 
-    --primary: 210 100% 56%;
-    --primary-foreground: 222 47% 11%;
-
-    --secondary: 215 28% 20%;
-    --secondary-foreground: 210 40% 96%;
-
-    --muted: 215 28% 18%;
-    --muted-foreground: 217 15% 60%;
-
-    --accent: 188 85% 48%;
-    --accent-foreground: 222 47% 11%;
-
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 215 28% 22%;
-    --input: 215 28% 20%;
-    --ring: 210 100% 56%;
-
-    --sidebar-background: 222 47% 9%;
-    --sidebar-foreground: 210 40% 90%;
-    --sidebar-primary: 210 100% 56%;
-    --sidebar-primary-foreground: 222 47% 11%;
-    --sidebar-accent: 215 28% 16%;
-    --sidebar-accent-foreground: 210 40% 96%;
-    --sidebar-border: 215 28% 18%;
-    --sidebar-ring: 210 100% 56%;
+    /* Glow effects */
+    --glow-primary: 120 100% 50%;
+    --glow-accent: 45 100% 50%;
 
     /* Custom tokens for DB Visualizer */
-    --table-header: 215 28% 16%;
-    --table-row-hover: 215 28% 20%;
-    --code-bg: 215 30% 15%;
-    --success: 142 70% 45%;
-    --warning: 38 92% 50%;
-    --info: 210 100% 56%;
+    --table-header: 0 0% 4%;
+    --table-row-hover: 0 0% 6%;
   }
 }
 
@@ -110,11 +87,173 @@ All colors MUST be HSL.
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    font-family: 'JetBrains Mono', monospace;
+    position: relative;
+  }
+
+  /* Scanline overlay for CRT effect */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0, 255, 65, 0.03) 0px,
+      transparent 1px,
+      transparent 2px,
+      rgba(0, 255, 65, 0.03) 3px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* Subtle noise texture */
+  body::after {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 9998;
+  }
+
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: 'JetBrains Mono', monospace;
+    @apply tracking-wide uppercase;
+    text-shadow: 0 0 5px hsl(var(--primary) / 0.5);
+  }
+
+  /* Custom scrollbar - terminal style */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+    border: 1px solid hsl(var(--border));
+  }
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--primary) / 0.3);
+    border: 1px solid hsl(var(--border));
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary) / 0.5);
   }
 }
 
 @layer utilities {
+  /* Terminal text effects */
+  .text-terminal {
+    text-shadow: 0 0 5px hsl(var(--primary) / 0.5);
+  }
+
+  .text-glow {
+    text-shadow: 0 0 10px hsl(var(--primary) / 0.8),
+                 0 0 20px hsl(var(--primary) / 0.4);
+  }
+
+  .text-glow-accent {
+    text-shadow: 0 0 10px hsl(var(--accent) / 0.8),
+                 0 0 20px hsl(var(--accent) / 0.4);
+  }
+  
+  /* Terminal borders with green glow */
+  .terminal-border {
+    border: 2px solid hsl(var(--border));
+    box-shadow: 0 0 10px hsl(var(--primary) / 0.2),
+                inset 0 0 10px hsl(var(--primary) / 0.05);
+  }
+
+  .terminal-border-accent {
+    border: 2px solid hsl(var(--accent) / 0.5);
+    box-shadow: 0 0 10px hsl(var(--accent) / 0.3);
+  }
+  
+  /* Hover effects - subtle professional glow */
+  .card-hover {
+    @apply transition-all duration-200 ease-out;
+  }
+  .card-hover:hover {
+    border-color: hsl(var(--primary) / 0.6);
+    box-shadow: 0 0 15px hsl(var(--primary) / 0.2),
+                inset 0 0 10px hsl(var(--primary) / 0.05);
+  }
+
+  .card-interactive {
+    @apply transition-all duration-150 cursor-pointer;
+  }
+  .card-interactive:hover {
+    background: hsl(var(--secondary) / 0.7);
+    border-color: hsl(var(--primary) / 0.5);
+  }
+  .card-interactive:active {
+    transform: scale(0.995);
+  }
+
+  /* ASCII-style status indicators */
+  .status-online::before {
+    content: '[ONLINE]';
+    @apply text-xs font-mono text-success mr-2;
+    text-shadow: 0 0 5px hsl(var(--success) / 0.5);
+  }
+  .status-offline::before {
+    content: '[OFFLINE]';
+    @apply text-xs font-mono text-muted-foreground mr-2;
+  }
+  .status-error::before {
+    content: '[ERROR]';
+    @apply text-xs font-mono text-destructive mr-2;
+    animation: blink 1s step-start infinite;
+  }
+
+  /* Terminal prompt styling */
+  .terminal-prompt::before {
+    content: '> ';
+    @apply text-primary;
+  }
+
+  /* Data grid styles - ASCII table */
+  .data-cell {
+    @apply font-mono text-sm py-2.5 px-4 border-b border-border;
+  }
+  .data-cell-header {
+    @apply font-bold text-xs uppercase tracking-widest text-primary bg-black border border-border;
+  }
+
+  /* Code block styles - terminal output */
+  .code-block {
+    @apply bg-black border-2 border-code-border p-4 font-mono text-sm overflow-x-auto;
+    box-shadow: 0 0 10px hsl(var(--primary) / 0.1);
+  }
+
+  /* Cursor blink for inputs */
+  .terminal-cursor::after {
+    content: '▮';
+    @apply text-primary animate-pulse ml-1;
+  }
+
+  /* Loading animation */
+  .terminal-loading::after {
+    content: '';
+    animation: ellipsis 1.5s infinite;
+  }
+
+  /* Glow pulse for active elements */
+  .pulse-glow {
+    animation: pulseGlow 2s ease-in-out infinite;
+  }
+
   /* Fade animations */
   @keyframes fade-in {
     from {
@@ -138,27 +277,33 @@ All colors MUST be HSL.
     }
   }
 
-  @keyframes pulse-glow {
-    0%, 100% {
+  @keyframes fade-out {
+    from {
       opacity: 1;
-      box-shadow: 0 0 8px hsl(var(--primary));
     }
-    50% {
-      opacity: 0.8;
-      box-shadow: 0 0 16px hsl(var(--primary));
+    to {
+      opacity: 0;
     }
   }
 
   .animate-fade-in {
-    animation: fade-in 0.3s ease-out;
+    animation: fadeIn 0.4s ease-out forwards;
   }
 
   .animate-fade-in-up {
     animation: fade-in-up 0.4s ease-out;
   }
 
+  .page-enter {
+    animation: fade-in 0.2s ease-out;
+  }
+
+  .page-exit {
+    animation: fade-out 0.15s ease-in;
+  }
+
   .animate-pulse-glow {
-    animation: pulse-glow 2s ease-in-out infinite;
+    animation: pulseGlow 2s ease-in-out infinite;
   }
 
   /* React Flow custom styles */
@@ -174,79 +319,204 @@ All colors MUST be HSL.
     cursor: grabbing;
   }
 
+  .react-flow__node-tableNode {
+    @apply !bg-transparent;
+  }
+
   .react-flow__edge-path {
+    stroke: hsl(var(--primary)) !important;
+    stroke-width: 2;
     transition: stroke 0.2s ease;
   }
 
+  .react-flow__edge.selected .react-flow__edge-path {
+    stroke: hsl(var(--accent)) !important;
+    stroke-width: 3;
+  }
+
+  /* Edge labels - use theme colors */
+  .react-flow__edge-text {
+    fill: hsl(var(--foreground)) !important;
+    color: hsl(var(--foreground)) !important;
+  }
+
+  .react-flow__edge-textbg {
+    fill: hsl(var(--card)) !important;
+    stroke: hsl(var(--border)) !important;
+  }
+
   .react-flow__controls {
-    @apply shadow-lg border border-border;
+    @apply !bg-card !border-border !shadow-xl;
   }
 
   .react-flow__controls-button {
-    @apply bg-card border-border;
-    @apply hover:bg-accent/10;
-  }
-
-  .react-flow__controls-button svg {
-    @apply fill-foreground;
+    @apply !bg-secondary !border-border hover:!bg-muted !fill-foreground;
   }
 
   .react-flow__minimap {
-    @apply shadow-lg;
+    @apply !bg-card !border-border !shadow-xl;
   }
 
   .react-flow__background {
     @apply bg-muted/20;
   }
 
-  /* SQL Syntax Highlighting */
+  /* ReactFlow Background component - ensure dark background */
+  .react-flow__background-pattern {
+    background-color: hsl(var(--background)) !important;
+  }
+
+  /* ReactFlow viewport/pane background */
+  .react-flow__pane {
+    background-color: hsl(var(--background)) !important;
+  }
+
+  .react-flow__viewport {
+    background-color: hsl(var(--background)) !important;
+  }
+
+  /* Override ring-offset to use dark background instead of white */
+  .react-flow__node-tableNode {
+    --tw-ring-offset-color: hsl(var(--background)) !important;
+  }
+  
+  .react-flow__node-tableNode [class*="ring-offset"] {
+    --tw-ring-offset-color: hsl(var(--background)) !important;
+  }
+  
+  /* Global override for ring-offset-background */
+  .ring-offset-background {
+    --tw-ring-offset-color: hsl(var(--background)) !important;
+  }
+
+  /* SQL Syntax Highlighting - Terminal Theme */
   .sql-keyword {
-    color: hsl(210, 100%, 56%);
+    color: hsl(var(--syntax-keyword));
     font-weight: 600;
   }
 
   .sql-string {
-    color: hsl(142, 70%, 45%);
+    color: hsl(var(--syntax-string));
   }
 
   .sql-number {
-    color: hsl(38, 92%, 50%);
+    color: hsl(var(--syntax-number));
   }
 
   .sql-comment {
-    color: hsl(215, 15%, 55%);
+    color: hsl(var(--syntax-comment));
     font-style: italic;
   }
 
   .sql-function {
-    color: hsl(280, 70%, 60%);
+    color: hsl(var(--syntax-function));
   }
 
   .sql-operator {
-    color: hsl(0, 70%, 55%);
+    color: hsl(var(--accent));
   }
+}
 
-  .dark .sql-keyword {
-    color: hsl(210, 100%, 65%);
+@layer components {
+  .btn-glow {
+    @apply relative overflow-hidden;
   }
+  .btn-glow::before {
+    content: '';
+    @apply absolute inset-0 opacity-0 transition-opacity duration-300;
+    background: linear-gradient(
+      135deg,
+      hsl(var(--primary) / 0.3),
+      hsl(var(--accent) / 0.3)
+    );
+  }
+  .btn-glow:hover::before {
+    @apply opacity-100;
+  }
+}
 
-  .dark .sql-string {
-    color: hsl(142, 70%, 55%);
+/* Keyframes */
+@keyframes pulseGlow {
+  0%, 100% {
+    box-shadow: 0 0 5px hsl(var(--primary) / 0.2);
   }
+  50% {
+    box-shadow: 0 0 15px hsl(var(--primary) / 0.4);
+  }
+}
 
-  .dark .sql-number {
-    color: hsl(38, 92%, 60%);
+@keyframes blink {
+  0%, 50% {
+    opacity: 1;
   }
+  51%, 100% {
+    opacity: 0;
+  }
+}
 
-  .dark .sql-comment {
-    color: hsl(215, 15%, 50%);
-  }
+@keyframes ellipsis {
+  0% { content: '.'; }
+  33% { content: '..'; }
+  66% { content: '...'; }
+}
 
-  .dark .sql-function {
-    color: hsl(280, 70%, 70%);
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
   }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 
-  .dark .sql-operator {
-    color: hsl(0, 84%, 70%);
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
   }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out forwards;
+}
+
+.animate-scale-in {
+  animation: scaleIn 0.2s ease-out forwards;
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    hsl(var(--muted)) 25%,
+    hsl(var(--muted-foreground) / 0.1) 50%,
+    hsl(var(--muted)) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
 }

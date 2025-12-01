@@ -1,5 +1,5 @@
 import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback, memo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Table2, Download, Filter, RefreshCcw, Key, ExternalLink, ArrowUpDown, ArrowUp, ArrowDown, Search, Copy, Check, Loader2, AlertCircle, Trash2, Edit, Plus, X, Maximize2 } from "lucide-react";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -55,6 +55,7 @@ import { toPng, toSvg } from "html-to-image";
 import { ErrorDisplay } from "@/components/error/ErrorDisplay";
 import { ConnectionErrorHandler } from "@/components/error/ConnectionErrorHandler";
 import { TableSkeleton } from "@/components/loading/LoadingSkeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
 const TableViewer = () => {
@@ -138,6 +139,9 @@ const TableViewer = () => {
   // Track previous tableId to detect changes
   const prevTableIdRef = useRef<string | null>(null);
   const prevPathnameRef = useRef<string | null>(null);
+  
+  // Track if we're transitioning between tables (for immediate ghost loading)
+  const [isTransitioning, setIsTransitioning] = useState(false);
 
   // Reset state and invalidate queries when tableId or pathname changes
   useEffect(() => {
@@ -148,6 +152,9 @@ const TableViewer = () => {
       const prevTableId = prevTableIdRef.current;
       prevTableIdRef.current = tableId || null;
       prevPathnameRef.current = location.pathname;
+      
+      // Immediately set transitioning state for instant ghost loading
+      setIsTransitioning(true);
       
       // Reset all state when navigating to a different table
       setSearchQuery("");
@@ -163,38 +170,10 @@ const TableViewer = () => {
       setChartOptions(null);
       
       // Only invalidate if we have connection and parsed table
+      // Don't aggressively remove queries - let React Query cache handle it for smooth transitions
       if (activeConnection && parsedTable) {
-        // Aggressively remove ALL table-related queries to force fresh fetch
-        queryClient.removeQueries({
-          predicate: (query) => {
-            const key = query.queryKey;
-            return Array.isArray(key) && (
-              key[0] === 'table-details' || 
-              key[0] === 'table-data'
-            );
-          },
-        });
-        
-        // Invalidate and remove queries for the previous table if it exists
-        if (prevTableId) {
-          try {
-            const parts = prevTableId.split('.');
-            if (parts.length >= 2) {
-              const prevSchema = parts[0];
-              const prevTableName = parts.slice(1).join('.');
-              queryClient.removeQueries({
-                queryKey: ['table-details', activeConnection.id, prevSchema, prevTableName],
-              });
-              queryClient.removeQueries({
-                queryKey: ['table-data', activeConnection.id, prevSchema, prevTableName],
-              });
-            }
-          } catch (error) {
-            // Silently handle query invalidation errors
-          }
-        }
-        
         // Invalidate queries for the new table to force fresh fetch
+        // But keep previous data visible while fetching (handled by placeholderData)
         queryClient.invalidateQueries({
           queryKey: ['table-details', activeConnection.id, parsedTable.schema, parsedTable.tableName],
         });
@@ -206,12 +185,16 @@ const TableViewer = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tableId, location.pathname]); // Only depend on tableId and pathname to avoid infinite loops
 
+  // Track previous table to show while loading new one
+  const [previousTable, setPreviousTable] = useState<TableType | null>(null);
+  
   // Fetch table details
   const {
     data: table,
     isLoading: tableLoading,
     isError: tableError,
     error: tableErrorDetails,
+    isFetching: tableFetching,
   } = useQuery<TableType>({
     queryKey: ['table-details', activeConnection?.id, parsedTable?.schema, parsedTable?.tableName],
     queryFn: () => schemasService.getTableDetails(
@@ -224,7 +207,18 @@ const TableViewer = () => {
     gcTime: 300000, // Keep in cache for 5 minutes
     refetchOnMount: 'always', // Always refetch when component mounts with new table
     refetchOnWindowFocus: false, // Don't refetch on focus
+    placeholderData: (previousData) => previousData, // Keep previous data visible while fetching
   });
+  
+  // Update previous table when we have a new one
+  useEffect(() => {
+    if (table && !tableLoading) {
+      setPreviousTable(table);
+    }
+  }, [table, tableLoading]);
+  
+  // Use previous table if current is loading (for smooth transitions)
+  const displayTable = table || previousTable;
 
   // Fetch table data
   const {
@@ -233,6 +227,7 @@ const TableViewer = () => {
     isError: dataError,
     error: dataErrorDetails,
     refetch: refetchData,
+    isFetching: dataFetching,
   } = useQuery({
     queryKey: [
       'table-data',
@@ -307,7 +302,7 @@ const TableViewer = () => {
     refetchOnMount: 'always', // Always refetch when component mounts with new table
     refetchOnWindowFocus: false, // Don't refetch on window focus
     refetchOnReconnect: false, // Don't refetch on reconnect
-    // Don't use keepPreviousData - it causes old table data to show when navigating
+    placeholderData: (previousData) => previousData, // Keep previous data visible while fetching
   });
 
   // Manually read from cache if tableDataResponse is undefined (during loading/unmount)
@@ -358,8 +353,31 @@ const TableViewer = () => {
   const effectiveResponse = tableDataResponse || cachedTableData || persistedTableData;
   const tableData = effectiveResponse?.data || [];
   const pagination = effectiveResponse?.pagination || persistedPagination;
-  const isLoading = tableLoading || dataLoading;
+  // Only show loading if we don't have any data to display
+  const isLoading = (tableLoading && !previousTable) || (dataLoading && !persistedTableData && !cachedTableData);
   const isError = tableError || dataError;
+  const isFetching = tableFetching || dataFetching;
+  
+  // Clear transitioning state when new table data is loaded
+  useEffect(() => {
+    // Clear transitioning when we have table details loaded (even if no rows)
+    // This allows empty tables to display properly
+    if (table && !tableLoading && !dataLoading) {
+      // Small delay to ensure smooth transition
+      const timer = setTimeout(() => {
+        setIsTransitioning(false);
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+    
+    // Fallback: Clear transitioning after 5 seconds to prevent stuck state
+    if (isTransitioning) {
+      const fallbackTimer = setTimeout(() => {
+        setIsTransitioning(false);
+      }, 5000);
+      return () => clearTimeout(fallbackTimer);
+    }
+  }, [table, tableLoading, dataLoading, isTransitioning]);
 
 
   // Reset to first page when filters/search change
@@ -550,8 +568,13 @@ const TableViewer = () => {
   };
 
   const filteredColumns = useMemo(
-    () => table?.columns.filter(col => visibleColumns.includes(col.name)) || [],
-    [table?.columns, visibleColumns]
+    () => {
+      const tableToUse = displayTable || table;
+      if (!tableToUse) return [];
+      if (visibleColumns.length === 0) return tableToUse.columns;
+      return tableToUse.columns.filter(col => visibleColumns.includes(col.name));
+    },
+    [displayTable, table, visibleColumns]
   );
 
   const handleCopyRow = useCallback(async (row: any) => {
@@ -1192,15 +1215,10 @@ const TableViewer = () => {
     );
   }
 
-  if (tableLoading) {
-    return (
-      <div className="p-6">
-        <TableSkeleton rows={5} columns={4} />
-      </div>
-    );
-  }
-
-  if (tableError || !table) {
+  // Always render the layout structure - use ghost loading for smooth transitions
+  // Only show error if we have a real error and no table data AND not transitioning
+  // This prevents showing errors during normal transitions
+  if (tableError && !displayTable && !isTransitioning && !tableLoading) {
     return (
       <div className="p-6 space-y-4">
         <ErrorDisplay
@@ -1225,6 +1243,26 @@ const TableViewer = () => {
     );
   }
 
+  // Determine if we should show ghost loading
+  // Only show ghost loading if:
+  // 1. We're transitioning AND no table is loaded yet, OR
+  // 2. We have no display table AND we're fetching AND no persisted data
+  // Don't show if we have table details loaded (even without rows)
+  const showGhostLoading = (isTransitioning && !table && !displayTable) || 
+                           (!displayTable && isFetching && !paginatedData.length && !persistedTableData && !table);
+  const columnsToShow = displayTable?.columns || previousTable?.columns || [];
+  const columnCount = columnsToShow.length || 5;
+  
+  // Determine if we should fade out previous content (when transitioning to new table)
+  // Only fade out if we're transitioning, have previous table, but no current table yet
+  // Once we have the new table, stop fading out
+  const shouldFadeOut = isTransitioning && previousTable && !table && !displayTable;
+  
+  // Get filtered columns for display (use all columns if none filtered)
+  const effectiveFilteredColumns = filteredColumns.length > 0 
+    ? filteredColumns 
+    : (displayTable?.columns || []);
+
   return (
     <div className="h-full flex flex-col">
       <div className="border-b border-border bg-card px-6 py-4 animate-fade-in">
@@ -1233,42 +1271,75 @@ const TableViewer = () => {
           <div className="flex items-center gap-3">
             <Table2 className="w-6 h-6 text-primary" />
             <div>
-              <h1 className="text-2xl font-bold">
-                {table.schema}.{table.name}
-              </h1>
-              <p className="text-sm text-muted-foreground mt-1">
-                {pagination?.filteredRows !== undefined && pagination.filteredRows !== pagination.totalRows
-                  ? `${pagination.filteredRows.toLocaleString()} of ${pagination.totalRows.toLocaleString()} rows`
-                  : `${pagination?.totalRows?.toLocaleString() || table.rowCount.toLocaleString()} rows`}
-                {' • '}
-                {table.size} • {table.columns.length} columns
-                {renderTime > 0 && <span className="text-primary ml-2">• Rendered in {renderTime}ms</span>}
-              </p>
+              <div className="relative">
+                {/* Real content with fade transition */}
+                <div
+                  className={cn(
+                    "transition-opacity duration-300 ease-in-out",
+                    (showGhostLoading && !displayTable) || shouldFadeOut ? "opacity-0 absolute inset-0 pointer-events-none" : "opacity-100"
+                  )}
+                >
+                  <h1 className="text-2xl font-bold">
+                    {displayTable?.schema || 'Loading...'}.{displayTable?.name || ''}
+                    {isFetching && displayTable && <span className="ml-2 text-muted-foreground text-sm font-normal">(loading...)</span>}
+                  </h1>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {displayTable ? (
+                      <>
+                        {pagination?.filteredRows !== undefined && pagination.filteredRows !== pagination.totalRows
+                          ? `${pagination.filteredRows.toLocaleString()} of ${pagination.totalRows.toLocaleString()} rows`
+                          : `${pagination?.totalRows?.toLocaleString() || displayTable.rowCount?.toLocaleString() || 0} rows`}
+                        {' • '}
+                        {displayTable.size || '0 B'} • {displayTable.columns?.length || 0} columns
+                        {renderTime > 0 && <span className="text-primary ml-2">• Rendered in {renderTime}ms</span>}
+                      </>
+                    ) : (
+                      <span>Loading table information...</span>
+                    )}
+                  </p>
+                </div>
+                {/* Ghost loading with fade transition */}
+                {showGhostLoading && !displayTable && (
+                  <div className="transition-opacity duration-300 ease-in-out opacity-100">
+                    <Skeleton className="h-8 w-64 mb-2" />
+                    <Skeleton className="h-4 w-48" />
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           <div className="flex gap-2">
-            <DataFilters
-              columns={table.columns}
-              initialFilters={filters}
-              onApplyFilters={(newFilters: FilterRule[]) => {
-                setFilters(newFilters);
-              }}
-            />
-            <ColumnManager
-              columns={table.columns}
-              visibleColumns={visibleColumns}
-              onToggleColumn={handleToggleColumn}
-              onToggleAll={handleToggleAllColumns}
-            />
+            {displayTable ? (
+              <>
+                <DataFilters
+                  columns={displayTable.columns}
+                  initialFilters={filters}
+                  onApplyFilters={(newFilters: FilterRule[]) => {
+                    setFilters(newFilters);
+                  }}
+                />
+                <ColumnManager
+                  columns={displayTable.columns}
+                  visibleColumns={visibleColumns}
+                  onToggleColumn={handleToggleColumn}
+                  onToggleAll={handleToggleAllColumns}
+                />
+              </>
+            ) : (
+              <>
+                <Skeleton className="h-9 w-24" />
+                <Skeleton className="h-9 w-32" />
+              </>
+            )}
             <ShortcutTooltip shortcut="Ctrl+R" description="Refresh table data">
               <Button 
                 variant="outline" 
                 size="sm" 
                 className="gap-2"
                 onClick={handleRefresh}
-                disabled={isLoading || !table}
+                disabled={isLoading || !displayTable}
               >
-                <RefreshCcw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+                <RefreshCcw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
                 Refresh
               </Button>
             </ShortcutTooltip>
@@ -1278,13 +1349,13 @@ const TableViewer = () => {
                 size="sm" 
                 className="gap-2"
                 onClick={() => setIsFullscreen(true)}
-                disabled={!table || activeTab !== 'data'}
+                disabled={!displayTable || activeTab !== 'data'}
               >
                 <Maximize2 className="w-4 h-4" />
                 Maximize
               </Button>
             </ShortcutTooltip>
-            {table && activeConnection && parsedTable && (
+            {displayTable && activeConnection && parsedTable && (
               <>
                 {editMode && (
                   <Button
@@ -1324,11 +1395,11 @@ const TableViewer = () => {
                   connectionId={activeConnection.id}
                   schema={parsedTable.schema}
                   table={parsedTable.tableName}
-                  tableName={table.name}
+                  tableName={displayTable.name}
                   filters={filters.length > 0 ? filters : undefined}
                   sort={sortColumn ? { column: sortColumn, direction: sortDirection } : undefined}
                   search={searchQuery || undefined}
-                  selectedColumns={visibleColumns.length > 0 && visibleColumns.length < table.columns.length ? visibleColumns : undefined}
+                  selectedColumns={visibleColumns.length > 0 && visibleColumns.length < displayTable.columns.length ? visibleColumns : undefined}
                 />
               </>
             )}
@@ -1336,9 +1407,14 @@ const TableViewer = () => {
         </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={(value) => {
-        setActiveTab(value);
-      }} className="flex-1 flex flex-col">
+      <Tabs 
+        key="main-tabs"
+        value={activeTab} 
+        onValueChange={(value) => {
+          setActiveTab(value);
+        }} 
+        className="flex-1 flex flex-col"
+      >
         <div className="border-b border-border px-6">
           <TabsList>
             <TabsTrigger value="data">Data</TabsTrigger>
@@ -1420,7 +1496,7 @@ const TableViewer = () => {
                 </div>
               </div>
 
-              <Card>
+              <Card className="transition-none">
                 <CardContent className="p-0">
                   <TooltipProvider>
                     <div 
@@ -1432,69 +1508,126 @@ const TableViewer = () => {
                         <div className="overflow-hidden">
                         {/* Header */}
                         <div className="sticky top-0 z-10 bg-table-header border-b">
-                          <div className="flex">
+                          <div className="flex relative">
                             <div className="w-12 px-3 py-3 text-center border-r bg-table-header flex items-center justify-center">
-                              <Checkbox
-                                checked={isAllSelected}
-                                onCheckedChange={handleSelectAll}
-                                className="cursor-pointer"
-                                aria-label="Select all rows"
-                              />
-                            </div>
-                            <div className="w-16 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider border-r bg-table-header">
-                              #
-                            </div>
-                            {filteredColumns.map((column) => (
-                              <div
-                                key={column.name}
-                                className="text-left text-xs font-semibold uppercase tracking-wider border-r overflow-hidden"
-                                style={{ minWidth: columnWidths[column.name] || 150, width: columnWidths[column.name] || 150, maxWidth: columnWidths[column.name] || 150 }}
-                              >
-                                <Tooltip>
-                                  <TooltipTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-8 gap-2 font-semibold flex items-center w-full max-w-full min-w-0 px-4 py-3"
-                                      onClick={() => handleSort(column.name)}
-                                    >
-                                      <span className="truncate min-w-0 flex-1 text-left max-w-full">{column.name}</span>
-                                      {column.isPrimaryKey && <Key className="w-3 h-3 text-primary flex-shrink-0" />}
-                                      {sortColumn === column.name ? (
-                                        sortDirection === "asc" ? (
-                                          <ArrowUp className="w-3 h-3 flex-shrink-0" />
-                                        ) : (
-                                          <ArrowDown className="w-3 h-3 flex-shrink-0" />
-                                        )
-                                      ) : (
-                                        <ArrowUpDown className="w-3 h-3 opacity-30 flex-shrink-0" />
-                                      )}
-                                    </Button>
-                                  </TooltipTrigger>
-                                  <TooltipContent>
-                                    <p>{column.name}</p>
-                                    {column.type && <p className="text-xs text-muted-foreground mt-1">{column.type}</p>}
-                                  </TooltipContent>
-                                </Tooltip>
+                              <div className="relative w-full h-full flex items-center justify-center">
+                                {/* Real checkbox */}
+                                <div
+                                  className={cn(
+                                    "transition-opacity duration-300 ease-in-out",
+                                    showGhostLoading || shouldFadeOut ? "opacity-0 absolute inset-0" : "opacity-100"
+                                  )}
+                                >
+                                  <Checkbox
+                                    checked={isAllSelected}
+                                    onCheckedChange={handleSelectAll}
+                                    className="cursor-pointer"
+                                    aria-label="Select all rows"
+                                  />
+                                </div>
+                                {/* Ghost skeleton */}
+                                {showGhostLoading && (
+                                  <div className="transition-opacity duration-300 ease-in-out opacity-100">
+                                    <Skeleton className="w-4 h-4" />
+                                  </div>
+                                )}
                               </div>
-                            ))}
+                            </div>
+                            <div className="relative w-16 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider border-r bg-table-header">
+                              {/* Real # header */}
+                              <div
+                                className={cn(
+                                  "transition-opacity duration-300 ease-in-out",
+                                  showGhostLoading || shouldFadeOut ? "opacity-0 absolute inset-0 pointer-events-none" : "opacity-100"
+                                )}
+                              >
+                                #
+                              </div>
+                              {/* Ghost skeleton for # header */}
+                              {showGhostLoading && (
+                                <div className="transition-opacity duration-300 ease-in-out opacity-100">
+                                  <Skeleton className="h-4 w-4" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="relative flex-1 flex">
+                              {/* Real columns */}
+                              <div
+                                className={cn(
+                                  "flex transition-opacity duration-300 ease-in-out",
+                                  showGhostLoading || shouldFadeOut ? "opacity-0 absolute inset-0" : "opacity-100"
+                                )}
+                              >
+                                {filteredColumns.map((column) => (
+                                <div
+                                  key={column.name}
+                                  className="text-left text-xs font-semibold uppercase tracking-wider border-r overflow-hidden"
+                                  style={{ minWidth: columnWidths[column.name] || 150, width: columnWidths[column.name] || 150, maxWidth: columnWidths[column.name] || 150 }}
+                                >
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 gap-2 font-semibold flex items-center w-full max-w-full min-w-0 px-4 py-3"
+                                        onClick={() => handleSort(column.name)}
+                                      >
+                                        <span className="truncate min-w-0 flex-1 text-left max-w-full">{column.name}</span>
+                                        {column.isPrimaryKey && <Key className="w-3 h-3 text-primary flex-shrink-0" />}
+                                        {sortColumn === column.name ? (
+                                          sortDirection === "asc" ? (
+                                            <ArrowUp className="w-3 h-3 flex-shrink-0" />
+                                          ) : (
+                                            <ArrowDown className="w-3 h-3 flex-shrink-0" />
+                                          )
+                                        ) : (
+                                          <ArrowUpDown className="w-3 h-3 opacity-30 flex-shrink-0" />
+                                        )}
+                                      </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p>{column.name}</p>
+                                      {column.type && <p className="text-xs text-muted-foreground mt-1">{column.type}</p>}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </div>
+                                ))}
+                              </div>
+                              {/* Ghost header columns */}
+                              {showGhostLoading && (
+                                <div className="flex transition-opacity duration-300 ease-in-out opacity-100">
+                                  {Array.from({ length: columnCount }).map((_, i) => (
+                                    <div
+                                      key={`ghost-header-${i}`}
+                                      className="border-r overflow-hidden"
+                                      style={{ minWidth: 150, width: 150, maxWidth: 150 }}
+                                    >
+                                      <Skeleton className="h-8 mx-4 my-3" />
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
 
                         {/* Body */}
                         <div
                           style={{
-                            height: `${rowVirtualizer.getTotalSize()}px`,
+                            height: showGhostLoading ? '400px' : `${rowVirtualizer.getTotalSize()}px`,
                             width: '100%',
                             position: 'relative',
                           }}
                         >
-                          {isLoading && paginatedData.length === 0 ? (
-                            <div className="text-center py-8 text-muted-foreground">
-                              <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin opacity-50" />
-                              <p>Loading data...</p>
-                            </div>
-                          ) : dataError ? (
+                          <div className="relative w-full h-full">
+                            {/* Real data with fade transition */}
+                            <div
+                              className={cn(
+                                "transition-opacity duration-300 ease-in-out",
+                                showGhostLoading || shouldFadeOut ? "opacity-0 absolute inset-0 pointer-events-none" : "opacity-100"
+                              )}
+                            >
+                              {dataError ? (
                             <div className="text-center py-8 text-muted-foreground">
                               <AlertCircle className="w-6 h-6 mx-auto mb-2 opacity-20 text-destructive" />
                               <p className="text-destructive">Failed to load table data</p>
@@ -1648,6 +1781,34 @@ const TableViewer = () => {
                               );
                             })
                           )}
+                            </div>
+                            {/* Ghost loading rows with fade transition */}
+                            {showGhostLoading && (
+                              <div className="transition-opacity duration-300 ease-in-out opacity-100 absolute inset-0">
+                                <div className="space-y-0">
+                                  {Array.from({ length: 8 }).map((_, rowIdx) => (
+                                    <div key={`ghost-row-${rowIdx}`} className="flex border-b">
+                                      <div className="w-12 px-3 py-3 flex items-center justify-center border-r">
+                                        <Skeleton className="w-4 h-4" />
+                                      </div>
+                                      <div className="w-16 px-4 py-3 border-r">
+                                        <Skeleton className="h-4 w-8" />
+                                      </div>
+                                      {Array.from({ length: columnCount }).map((_, colIdx) => (
+                                        <div
+                                          key={`ghost-cell-${rowIdx}-${colIdx}`}
+                                          className="border-r px-4 py-3"
+                                          style={{ minWidth: 150, width: 150, maxWidth: 150 }}
+                                        >
+                                          <Skeleton className="h-4 w-full" />
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                         </div>
                       </div>
@@ -1658,7 +1819,7 @@ const TableViewer = () => {
               <div className="flex items-center justify-between text-sm">
                 <div className="text-muted-foreground flex items-center gap-4">
                   <span>
-                    {isLoading ? (
+                    {isFetching && !pagination ? (
                       <span className="text-muted-foreground">Loading...</span>
                     ) : pagination ? (
                       <>
@@ -1676,7 +1837,7 @@ const TableViewer = () => {
                       <span className="text-muted-foreground">No data</span>
                     )}
                   </span>
-                  {isLoading && <span className="text-primary">• Loading...</span>}
+                  {isFetching && <span className="text-primary">• Loading...</span>}
                   <span className="text-xs">
                     Virtual scrolling enabled • Press <kbd className="px-1.5 py-0.5 bg-muted rounded border text-foreground">Cmd+R</kbd> to refresh
                   </span>
@@ -1724,16 +1885,38 @@ const TableViewer = () => {
 
           <TabsContent value="charts" className="mt-0" forceMount>
             <div className="p-6 space-y-4">
-              {!table ? (
+              {showGhostLoading && !displayTable ? (
+                // Ghost loading for charts
+                <div className="space-y-4">
+                  <Card>
+                    <CardHeader>
+                      <Skeleton className="h-6 w-32" />
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <Skeleton className="h-10 w-full" />
+                      <Skeleton className="h-10 w-full" />
+                      <Skeleton className="h-32 w-full" />
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardHeader>
+                      <Skeleton className="h-6 w-40" />
+                    </CardHeader>
+                    <CardContent>
+                      <Skeleton className="h-96 w-full" />
+                    </CardContent>
+                  </Card>
+                </div>
+              ) : !displayTable ? (
                 <Card>
                   <CardContent className="py-12 text-center text-muted-foreground">
-                    <p>Loading table information...</p>
+                    <p>Table data is required to generate charts. Please load a table first.</p>
                   </CardContent>
                 </Card>
               ) : (
                 <>
                   <ChartBuilder
-                    columns={table.columns}
+                    columns={displayTable.columns}
                     onGenerateChart={handleGenerateChart}
                     isLoading={isGeneratingChart}
                   />
@@ -1756,7 +1939,29 @@ const TableViewer = () => {
 
           <TabsContent value="structure" className="mt-0" forceMount>
             <div className="p-6 space-y-4">
-              {table.columns.map((column, idx) => (
+              {showGhostLoading && !displayTable ? (
+                // Ghost loading for structure
+                <>
+                  {Array.from({ length: 5 }).map((_, idx) => (
+                    <Card key={`ghost-column-${idx}`}>
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <Skeleton className="h-5 w-32" />
+                          <div className="flex gap-2">
+                            <Skeleton className="h-5 w-20" />
+                            <Skeleton className="h-5 w-16" />
+                          </div>
+                        </div>
+                        <Skeleton className="h-4 w-24 mt-2" />
+                      </CardHeader>
+                      <CardContent>
+                        <Skeleton className="h-4 w-40" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </>
+              ) : (
+                displayTable?.columns?.map((column, idx) => (
                 <Card key={`column-${column.name}-${idx}`}>
                   <CardHeader>
                     <div className="flex items-center justify-between">
@@ -1784,13 +1989,33 @@ const TableViewer = () => {
                     </CardContent>
                   )}
                 </Card>
-              ))}
+                ))
+              )}
             </div>
           </TabsContent>
 
           <TabsContent value="indexes" className="mt-0" forceMount>
             <div className="p-6 space-y-4">
-              {table.indexes.map((index, idx) => (
+              {showGhostLoading && !displayTable ? (
+                // Ghost loading for indexes
+                <>
+                  {Array.from({ length: 3 }).map((_, idx) => (
+                    <Card key={`ghost-index-${idx}`}>
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <Skeleton className="h-5 w-40" />
+                          <div className="flex gap-2">
+                            <Skeleton className="h-5 w-16" />
+                            <Skeleton className="h-5 w-14" />
+                          </div>
+                        </div>
+                        <Skeleton className="h-4 w-64 mt-2" />
+                      </CardHeader>
+                    </Card>
+                  ))}
+                </>
+              ) : (
+                displayTable?.indexes?.map((index, idx) => (
                 <Card key={`index-${index.name}-${index.columns.join('-')}-${idx}`}>
                   <CardHeader>
                     <div className="flex items-center justify-between">
@@ -1805,28 +2030,54 @@ const TableViewer = () => {
                     </CardDescription>
                   </CardHeader>
                 </Card>
-              ))}
+                ))
+              )}
             </div>
           </TabsContent>
 
           <TabsContent value="relationships" className="mt-0" forceMount>
             <div className="p-6">
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                    Foreign Keys (Outgoing)
-                    {table.foreignKeys.length > 0 && (
-                      <Badge variant="secondary">{table.foreignKeys.length}</Badge>
-                    )}
-                  </h3>
-                  {table.foreignKeys.length > 0 ? (
+              {showGhostLoading && !displayTable ? (
+                // Ghost loading for relationships
+                <div className="space-y-6">
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Skeleton className="h-6 w-48" />
+                      <Skeleton className="h-5 w-8" />
+                    </div>
                     <div className="space-y-3">
-                      {table.foreignKeys.map((fk, idx) => (
+                      {Array.from({ length: 2 }).map((_, idx) => (
+                        <Card key={`ghost-fk-${idx}`}>
+                          <CardContent className="p-4">
+                            <Skeleton className="h-4 w-full mb-2" />
+                            <Skeleton className="h-4 w-3/4" />
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <Skeleton className="h-6 w-40 mb-3" />
+                    <Skeleton className="h-4 w-full" />
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                      Foreign Keys (Outgoing)
+                      {displayTable?.foreignKeys && displayTable.foreignKeys.length > 0 && (
+                        <Badge variant="secondary">{displayTable.foreignKeys.length}</Badge>
+                      )}
+                    </h3>
+                    {displayTable?.foreignKeys && displayTable.foreignKeys.length > 0 ? (
+                    <div className="space-y-3">
+                      {displayTable.foreignKeys.map((fk, idx) => (
                         <RelationshipCard
                           key={`fk-${fk.name}-${fk.columns.join('-')}-${idx}`}
                           foreignKey={fk}
-                          currentTable={table.name}
-                          currentSchema={table.schema}
+                          currentTable={displayTable.name}
+                          currentSchema={displayTable.schema}
                           isIncoming={false}
                         />
                       ))}
@@ -1844,7 +2095,8 @@ const TableViewer = () => {
                     Incoming relationships will be available in a future update. Use the ER Diagram view to see all relationships.
                   </p>
                 </div>
-              </div>
+                </div>
+              )}
             </div>
           </TabsContent>
         </div>
@@ -1860,13 +2112,13 @@ const TableViewer = () => {
       />
       
       {/* Bulk Update Dialog */}
-      {table && (
+      {displayTable && (
         <BulkUpdateDialog
           open={updateDialogOpen}
           onOpenChange={setUpdateDialogOpen}
           onConfirm={handleBulkUpdate}
           rowCount={selectedRows.size}
-          columns={table.columns}
+          columns={displayTable.columns}
           selectedRowsData={selectedRowsData}
           isUpdating={isUpdating}
         />
@@ -1886,12 +2138,12 @@ const TableViewer = () => {
       )}
       
       {/* Add Row Dialog */}
-      {table && (
+      {displayTable && (
         <AddRowDialog
           open={addRowDialogOpen}
           onOpenChange={setAddRowDialogOpen}
           onConfirm={handleAddRow}
-          columns={table.columns}
+          columns={displayTable.columns}
           isInserting={isInserting}
         />
       )}
@@ -1949,8 +2201,22 @@ const TableViewer = () => {
                           aria-label="Select all rows"
                         />
                       </div>
-                      <div className="w-16 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider border-r bg-table-header">
-                        #
+                      <div className="relative w-16 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider border-r bg-table-header">
+                        {/* Real # header */}
+                        <div
+                          className={cn(
+                            "transition-opacity duration-300 ease-in-out",
+                            showGhostLoading || shouldFadeOut ? "opacity-0 absolute inset-0 pointer-events-none" : "opacity-100"
+                          )}
+                        >
+                          #
+                        </div>
+                        {/* Ghost skeleton for # header */}
+                        {showGhostLoading && (
+                          <div className="transition-opacity duration-300 ease-in-out opacity-100">
+                            <Skeleton className="h-4 w-4" />
+                          </div>
+                        )}
                       </div>
                       {/* Show ALL columns in fullscreen view, not just filtered ones */}
                       {(table?.columns || []).map((column) => (
@@ -1991,7 +2257,7 @@ const TableViewer = () => {
                   </div>
 
                   {/* Body - Show all rows without virtualization for full export */}
-                  {isLoading && paginatedData.length === 0 ? (
+                  {(isLoading && paginatedData.length === 0 && !persistedTableData) ? (
                     <div className="text-center py-8 text-muted-foreground">
                       <Loader2 className="w-6 h-6 mx-auto mb-2 animate-spin opacity-50" />
                       <p>Loading data...</p>

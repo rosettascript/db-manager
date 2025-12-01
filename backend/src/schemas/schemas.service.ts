@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConnectionManagerService } from '../common/database/connection-manager.service';
-import { Schema, Table, Column, Index, ForeignKey, DatabaseStats, DatabaseFunction, DatabaseView, DatabaseIndex, FunctionCategory, FunctionDetails, ViewDetails, IndexDetails } from './interfaces/schema.interface';
+import { Schema, Table, Column, Index, ForeignKey, DatabaseStats, DatabaseFunction, DatabaseView, DatabaseIndex, FunctionCategory, FunctionDetails, ViewDetails, IndexDetails, DatabaseEnum, EnumDetails } from './interfaces/schema.interface';
 
 @Injectable()
 export class SchemasService {
@@ -797,6 +797,120 @@ export class SchemasService {
     } catch (error) {
       if (error instanceof NotFoundException) throw error;
       this.logger.error(`Failed to get index details: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all enums for a connection (optionally filtered by schema)
+   */
+  async getEnums(connectionId: string, schema?: string): Promise<DatabaseEnum[]> {
+    const pool = this.connectionManager.getPool(connectionId);
+    if (!pool) {
+      throw new NotFoundException(`Connection ${connectionId} not found or not connected`);
+    }
+
+    let query = `
+      SELECT 
+        n.nspname as schema,
+        t.typname as name,
+        array_agg(e.enumlabel ORDER BY e.enumsortorder)::text[] as values
+      FROM pg_type t
+      JOIN pg_enum e ON t.oid = e.enumtypid
+      JOIN pg_namespace n ON t.typnamespace = n.oid
+      WHERE n.nspname NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
+        AND t.typtype = 'e'
+    `;
+
+    const params: any[] = [];
+    if (schema) {
+      query += ` AND n.nspname = $1`;
+      params.push(schema);
+    }
+
+    query += ` GROUP BY n.nspname, t.typname ORDER BY n.nspname, t.typname;`;
+
+    try {
+      const result = await pool.query(query, params);
+      return result.rows.map((row) => ({
+        id: `${row.schema}.${row.name}`,
+        name: row.name,
+        schema: row.schema,
+        values: Array.isArray(row.values) ? row.values : [],
+      }));
+    } catch (error) {
+      this.logger.error(`Failed to get enums for connection ${connectionId}: ${error.message}`);
+      throw error;
+    }
+  }
+
+  /**
+   * Get detailed enum information
+   */
+  async getEnumDetails(
+    connectionId: string,
+    schema: string,
+    enumName: string,
+  ): Promise<EnumDetails> {
+    const pool = this.connectionManager.getPool(connectionId);
+    if (!pool) {
+      throw new NotFoundException(`Connection ${connectionId} not found or not connected`);
+    }
+
+    // Get enum values
+    const enumQuery = `
+      SELECT 
+        n.nspname as schema,
+        t.typname as name,
+        array_agg(e.enumlabel ORDER BY e.enumsortorder)::text[] as values,
+        pg_get_userbyid(t.typowner) as owner
+      FROM pg_type t
+      JOIN pg_enum e ON t.oid = e.enumtypid
+      JOIN pg_namespace n ON t.typnamespace = n.oid
+      WHERE n.nspname = $1
+        AND t.typname = $2
+        AND t.typtype = 'e'
+      GROUP BY n.nspname, t.typname, t.typowner;
+    `;
+
+    try {
+      const enumResult = await pool.query(enumQuery, [schema, enumName]);
+      if (enumResult.rows.length === 0) {
+        throw new NotFoundException(`Enum ${schema}.${enumName} not found`);
+      }
+
+      const row = enumResult.rows[0];
+
+      // Find where this enum is used
+      const usageQuery = `
+        SELECT 
+          table_schema,
+          table_name,
+          column_name
+        FROM information_schema.columns
+        WHERE udt_name = $1
+          AND table_schema = $2
+        ORDER BY table_schema, table_name, column_name;
+      `;
+
+      const usageResult = await pool.query(usageQuery, [enumName, schema]);
+      const usedInTables = usageResult.rows.map((r) => ({
+        tableSchema: r.table_schema,
+        tableName: r.table_name,
+        columnName: r.column_name,
+      }));
+
+      return {
+        id: `${row.schema}.${row.name}`,
+        name: row.name,
+        schema: row.schema,
+        values: Array.isArray(row.values) ? row.values : [],
+        owner: row.owner,
+        usedInTables,
+      };
+    } catch (error) {
+      if (error instanceof NotFoundException) throw error;
+      this.logger.error(`Failed to get enum details: ${error.message}`);
       throw error;
     }
   }

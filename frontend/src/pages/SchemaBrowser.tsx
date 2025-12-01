@@ -14,8 +14,11 @@ import { toast } from "sonner";
 import { ErrorDisplay } from "@/components/error/ErrorDisplay";
 import { ConnectionErrorHandler } from "@/components/error/ConnectionErrorHandler";
 import { LoadingSkeleton } from "@/components/loading/LoadingSkeleton";
+import { Skeleton } from "@/components/ui/skeleton";
 import { SchemaDumpDialog } from "@/components/schema-dump/SchemaDumpDialog";
 import { NoTablesEmptyState } from "@/components/empty/EmptyState";
+import { cn } from "@/lib/utils";
+import { PageHeader } from "@/components/layout/PageHeader";
 
 const SchemaBrowser = () => {
   const [searchQuery, setSearchQuery] = useState("");
@@ -80,6 +83,7 @@ const SchemaBrowser = () => {
 
   const isLoading = schemasLoading || tablesLoading || statsLoading;
   const isError = schemasError || tablesError || statsError;
+  const isFetching = isLoading;
   // Get the first available error object
   const error = schemasErrorObj || tablesErrorObj || statsErrorObj;
 
@@ -106,15 +110,12 @@ const SchemaBrowser = () => {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="border-b border-border bg-card px-6 py-4 animate-fade-in">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold">Schema Browser</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Explore database structure and relationships
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
+      <PageHeader
+        title="Schema Browser"
+        description="Explore database structure and relationships"
+        icon={<Table2 className="h-5 w-5 text-primary" />}
+        actions={
+          <>
             <Button
               variant="outline"
               size="sm"
@@ -144,75 +145,46 @@ const SchemaBrowser = () => {
                 </>
               )}
             </Button>
-          </div>
-        </div>
+          </>
+        }
+      />
+      <div className="px-6 py-4">
 
         <div className="grid grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Schemas</p>
-                  {statsLoading ? (
-                    <Loader2 className="w-6 h-6 animate-spin mt-1" />
-                  ) : (
-                    <p className="text-2xl font-bold">{stats?.schemaCount ?? schemas.length ?? 0}</p>
+          {[1, 2, 3, 4].map((idx) => (
+            <Card key={idx}>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-between">
+                  <div className="flex-1">
+                    {isFetching ? (
+                      <>
+                        <Skeleton className="h-4 w-20 mb-2" />
+                        <Skeleton className="h-8 w-16" />
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-sm text-muted-foreground">
+                          {idx === 1 ? 'Schemas' : idx === 2 ? 'Tables' : idx === 3 ? 'Total Rows' : 'Database Size'}
+                        </p>
+                        <p className="text-2xl font-bold">
+                          {idx === 1 && (stats?.schemaCount ?? schemas.length ?? 0)}
+                          {idx === 2 && (stats?.tableCount ?? tables.length ?? 0)}
+                          {idx === 3 && (stats?.totalRows?.toLocaleString() ?? tables.reduce((sum, t) => sum + t.rowCount, 0).toLocaleString() ?? 0)}
+                          {idx === 4 && (stats?.totalSize ? stats.totalSize.replace(/[^0-9.]/g, '') + ' ' + stats.totalSize.replace(/[0-9.]/g, '') : '0 MB')}
+                        </p>
+                      </>
+                    )}
+                  </div>
+                  {!isFetching && (
+                    <>
+                      {idx === 1 && <Database className="w-8 h-8 text-primary opacity-20" />}
+                      {idx === 2 && <Table2 className="w-8 h-8 text-primary opacity-20" />}
+                    </>
                   )}
                 </div>
-                <Database className="w-8 h-8 text-primary opacity-20" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Tables</p>
-                  {statsLoading ? (
-                    <Loader2 className="w-6 h-6 animate-spin mt-1" />
-                  ) : (
-                    <p className="text-2xl font-bold">{stats?.tableCount ?? tables.length ?? 0}</p>
-                  )}
-                </div>
-                <Table2 className="w-8 h-8 text-primary opacity-20" />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Rows</p>
-                  {statsLoading ? (
-                    <Loader2 className="w-6 h-6 animate-spin mt-1" />
-                  ) : (
-                    <p className="text-2xl font-bold">
-                      {stats?.totalRows?.toLocaleString() ?? tables.reduce((sum, t) => sum + t.rowCount, 0).toLocaleString() ?? 0}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-muted-foreground">Database Size</p>
-                  {statsLoading ? (
-                    <Loader2 className="w-6 h-6 animate-spin mt-1" />
-                  ) : (
-                    <p className="text-2xl font-bold">
-                      {stats?.totalSize ? stats.totalSize.replace(/[^0-9.]/g, '') + ' ' + stats.totalSize.replace(/[0-9.]/g, '') : '0 MB'}
-                    </p>
-                  )}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
 
@@ -222,10 +194,6 @@ const SchemaBrowser = () => {
             <AlertCircle className="w-12 h-12 mx-auto mb-3 opacity-20" />
             <p className="text-lg font-medium mb-2">No Connection Selected</p>
             <p className="text-sm">Please select a database connection to view schemas and tables.</p>
-          </div>
-        ) : isLoading ? (
-          <div className="p-6">
-            <LoadingSkeleton variant="grid" rows={6} />
           </div>
         ) : isError ? (
           <div className="p-6">
@@ -248,27 +216,36 @@ const SchemaBrowser = () => {
               </div>
             )}
           </div>
-        ) : filteredTables.length === 0 ? (
-          <NoTablesEmptyState
-            searchQuery={searchQuery}
-            onClearSearch={() => setSearchQuery('')}
-          />
         ) : (
-          <>
-            <div className="mb-4">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search tables and columns..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
+          <div className="relative">
+            {/* Real content with fade transition */}
+            <div
+              className={cn(
+                "transition-opacity duration-300 ease-in-out",
+                isFetching ? "opacity-0 absolute inset-0 pointer-events-none" : "opacity-100"
+              )}
+            >
+              {filteredTables.length === 0 ? (
+                <NoTablesEmptyState
+                  searchQuery={searchQuery}
+                  onClearSearch={() => setSearchQuery('')}
                 />
-              </div>
-            </div>
+              ) : (
+                <>
+                  <div className="mb-4">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search tables and columns..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
 
-            <div className="grid gap-4">
-              {filteredTables.map((table, idx) => (
+                  <div className="grid gap-4">
+                    {filteredTables.map((table, idx) => (
                 <Card
                   key={table.id}
                   className="hover:border-primary/50 transition-all duration-200 hover:shadow-lg hover:scale-[1.01]"
@@ -331,10 +308,47 @@ const SchemaBrowser = () => {
                       )}
                     </div>
                   </CardContent>
-                </Card>
-              ))}
+                    </Card>
+                    ))}
+                  </div>
+                </>
+              )}
             </div>
-          </>
+            {/* Ghost loading with fade transition */}
+            {isFetching && (
+              <div className="transition-opacity duration-300 ease-in-out opacity-100">
+                <div className="mb-4">
+                  <Skeleton className="h-10 w-full max-w-md" />
+                </div>
+                <div className="grid gap-4">
+                  {Array.from({ length: 6 }).map((_, idx) => (
+                    <Card key={`ghost-table-${idx}`}>
+                      <CardHeader>
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <Skeleton className="h-6 w-48 mb-2" />
+                            <Skeleton className="h-4 w-64" />
+                          </div>
+                          <div className="flex gap-2">
+                            <Skeleton className="h-5 w-12" />
+                            <Skeleton className="h-5 w-16" />
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <Skeleton className="h-4 w-24 mb-2" />
+                        <div className="grid grid-cols-2 gap-2">
+                          {Array.from({ length: 8 }).map((_, colIdx) => (
+                            <Skeleton key={`ghost-col-${idx}-${colIdx}`} className="h-10 w-full" />
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         )}
       </div>
 

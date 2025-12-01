@@ -52,3 +52,4 @@ coverage
 # OS
 Thumbs.db
 
+*.pid

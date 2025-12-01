@@ -1,9 +1,12 @@
 import { useState, useMemo, useEffect } from "react";
 import { Play, Save, Download, Trash2, Code2, History, BookMarked, X, Loader2, BarChart3, CheckCircle2, Zap, FileCode } from "lucide-react";
+import { PageHeader } from "@/components/layout/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import {
   Table,
   TableBody,
@@ -444,14 +447,11 @@ const QueryBuilder = () => {
 
   return (
     <div className="flex flex-col">
-      <div className="border-b border-border bg-card px-6 py-4 animate-fade-in">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Query Builder</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Execute SQL queries and analyze results
-            </p>
-          </div>
+      <PageHeader
+        title="Query Builder"
+        description="Execute SQL queries and analyze results"
+        icon={<Code2 className="h-5 w-5 text-primary" />}
+        actions={
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -528,8 +528,8 @@ const QueryBuilder = () => {
               </Button>
             </ShortcutTooltip>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       <div className="flex flex-col">
         <div className="border-b border-border">
@@ -633,10 +633,40 @@ const QueryBuilder = () => {
                     </CardContent>
                   </Card>
                 ) : isRunning ? (
+                  // Ghost loading for query results
                   <Card>
-                    <CardContent className="py-12 text-center">
-                      <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-primary" />
-                      <p className="text-muted-foreground">Executing query...</p>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-center justify-between">
+                        <Skeleton className="h-5 w-32" />
+                        <div className="flex items-center gap-3">
+                          <Skeleton className="h-5 w-16" />
+                          <Skeleton className="h-5 w-24" />
+                        </div>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="overflow-x-auto">
+                        <div className="border rounded-lg">
+                          {/* Table header skeleton */}
+                          <div className="flex border-b bg-table-header">
+                            {Array.from({ length: 5 }).map((_, idx) => (
+                              <div key={`ghost-header-${idx}`} className="flex-1 p-4 border-r last:border-r-0">
+                                <Skeleton className="h-4 w-24" />
+                              </div>
+                            ))}
+                          </div>
+                          {/* Table rows skeleton */}
+                          {Array.from({ length: 8 }).map((_, rowIdx) => (
+                            <div key={`ghost-row-${rowIdx}`} className="flex border-b last:border-b-0">
+                              {Array.from({ length: 5 }).map((_, colIdx) => (
+                                <div key={`ghost-cell-${rowIdx}-${colIdx}`} className="flex-1 p-4 border-r last:border-r-0">
+                                  <Skeleton className="h-4 w-full" />
+                                </div>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </CardContent>
                   </Card>
                 ) : queryError ? (
@@ -784,10 +814,18 @@ const QueryBuilder = () => {
                     </CardContent>
                   </Card>
                 ) : explainQueryQuery.isFetching ? (
+                  // Ghost loading for explain plan
                   <Card>
-                    <CardContent className="py-12 text-center">
-                      <Loader2 className="w-8 h-8 animate-spin mx-auto mb-3 text-primary" />
-                      <p className="text-muted-foreground">Analyzing query plan...</p>
+                    <CardHeader>
+                      <Skeleton className="h-6 w-40" />
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      {Array.from({ length: 5 }).map((_, idx) => (
+                        <div key={`ghost-explain-${idx}`} className="space-y-2">
+                          <Skeleton className="h-4 w-full" />
+                          <Skeleton className="h-4 w-3/4" />
+                        </div>
+                      ))}
                     </CardContent>
                   </Card>
                 ) : explainQueryQuery.error ? (

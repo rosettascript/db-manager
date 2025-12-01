@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Delete, Param, Query, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { SchemasService } from './schemas.service';
-import { Schema, Table, DatabaseStats, DatabaseFunction, DatabaseView, DatabaseIndex, FunctionCategory, FunctionDetails, ViewDetails, IndexDetails } from './interfaces/schema.interface';
+import { Schema, Table, DatabaseStats, DatabaseFunction, DatabaseView, DatabaseIndex, FunctionCategory, FunctionDetails, ViewDetails, IndexDetails, DatabaseEnum, EnumDetails } from './interfaces/schema.interface';
 import { DeleteTableDto, DeleteSchemaDto } from './dto';
 
 @Controller('connections/:connectionId/db')
@@ -202,6 +202,31 @@ export class SchemasController {
       cascade: dto.cascade,
       confirmName: dto.confirmName,
     });
+  }
+
+  /**
+   * Get all enums (optionally filtered by schema)
+   * GET /api/connections/:connectionId/db/enums?schema=public
+   */
+  @Get('enums')
+  async getEnums(
+    @Param('connectionId') connectionId: string,
+    @Query('schema') schema?: string,
+  ): Promise<DatabaseEnum[]> {
+    return this.schemasService.getEnums(connectionId, schema);
+  }
+
+  /**
+   * Get enum details
+   * GET /api/connections/:connectionId/db/enums/:schema/:enumName
+   */
+  @Get('enums/:schema/:enumName')
+  async getEnumDetails(
+    @Param('connectionId') connectionId: string,
+    @Param('schema') schema: string,
+    @Param('enumName') enumName: string,
+  ): Promise<EnumDetails> {
+    return this.schemasService.getEnumDetails(connectionId, schema, enumName);
   }
 }
 

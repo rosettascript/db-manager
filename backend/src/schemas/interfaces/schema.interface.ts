@@ -97,3 +97,19 @@ export interface IndexDetails extends DatabaseIndex {
   indexScans?: number;
 }
 
+export interface DatabaseEnum {
+  id: string;
+  name: string;
+  schema: string;
+  values: string[];
+}
+
+export interface EnumDetails extends DatabaseEnum {
+  owner?: string;
+  usedInTables?: Array<{
+    tableSchema: string;
+    tableName: string;
+    columnName: string;
+  }>;
+}
+

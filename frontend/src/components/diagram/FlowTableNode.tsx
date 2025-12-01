@@ -27,8 +27,8 @@ const FlowTableNodeComponent = ({ data, selected }: NodeProps<TableNodeData>) =>
       <Card
         className={cn(
           "w-80 shadow-lg transition-all duration-200",
-          selected && "ring-2 ring-primary ring-offset-2 shadow-2xl",
-          isHighlighted && "ring-2 ring-accent ring-offset-2 shadow-xl",
+          selected && "ring-4 ring-primary ring-offset-2 ring-offset-background shadow-2xl",
+          isHighlighted && "ring-4 ring-accent ring-offset-2 ring-offset-background shadow-xl",
           "hover:shadow-xl",
           "hover:cursor-pointer active:cursor-grabbing"
         )}

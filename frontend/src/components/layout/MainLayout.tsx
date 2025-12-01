@@ -1,4 +1,4 @@
-import { ReactNode, useState, createContext, useContext } from "react";
+import { ReactNode, useState, createContext, useContext, memo } from "react";
 import { Header } from "./Header";
 import { Sidebar } from "./Sidebar";
 import { useKeyboardShortcut } from "@/hooks/useKeyboardShortcut";
@@ -23,7 +23,7 @@ interface MainLayoutProps {
   children: ReactNode;
 }
 
-export const MainLayout = ({ children }: MainLayoutProps) => {
+export const MainLayout = memo(({ children }: MainLayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // Toggle sidebar with Ctrl+B
@@ -42,15 +42,19 @@ export const MainLayout = ({ children }: MainLayoutProps) => {
         <div className="flex-1 flex overflow-hidden">
           <div
             className={cn(
-              "transition-all duration-300 ease-in-out border-r border-border bg-sidebar h-full",
+              "transition-all duration-300 ease-in-out border-r border-border bg-sidebar h-full flex-shrink-0",
               isSidebarOpen ? "w-64" : "w-0 overflow-hidden"
             )}
           >
             {isSidebarOpen && <Sidebar />}
           </div>
-          <main className="flex-1 overflow-auto bg-background">{children}</main>
+          <main className="flex-1 overflow-hidden bg-background relative">
+            {children}
+          </main>
         </div>
       </div>
     </SidebarContext.Provider>
   );
-};
+});
+
+MainLayout.displayName = "MainLayout";

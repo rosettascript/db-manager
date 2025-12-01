@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, createContext, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CommandDialog,
@@ -23,6 +23,20 @@ import { useKeyboardShortcut } from '@/hooks/useKeyboardShortcut';
 
 const RECENT_COMMANDS_KEY = 'db-visualizer-recent-commands';
 const MAX_RECENT_COMMANDS = 5;
+
+// Context for CommandPalette state
+const CommandPaletteContext = createContext<{
+  open: boolean;
+  setOpen: (open: boolean) => void;
+} | null>(null);
+
+export function useCommandPalette() {
+  const context = useContext(CommandPaletteContext);
+  if (!context) {
+    throw new Error('useCommandPalette must be used within CommandPalette');
+  }
+  return context;
+}
 
 export interface CommandPaletteCommand {
   id: string;
@@ -68,8 +82,19 @@ const defaultCommands: CommandPaletteCommand[] = [
   },
 ];
 
-export function CommandPalette({ commands = defaultCommands }: CommandPaletteProps) {
+// Separate provider component
+export function CommandPaletteProvider({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
+  
+  return (
+    <CommandPaletteContext.Provider value={{ open, setOpen }}>
+      {children}
+    </CommandPaletteContext.Provider>
+  );
+}
+
+export function CommandPalette({ commands = defaultCommands }: CommandPaletteProps) {
+  const { open, setOpen } = useCommandPalette();
   const navigate = useNavigate();
   const [recentCommands, setRecentCommands] = useState<CommandPaletteCommand[]>([]);
 
@@ -174,61 +199,61 @@ export function CommandPalette({ commands = defaultCommands }: CommandPalettePro
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
-      <CommandInput placeholder="Type a command or search..." />
-      <CommandList>
-        <CommandEmpty>No results found.</CommandEmpty>
-        
-        {recentCommands.length > 0 && (
-          <>
-            <CommandGroup heading="Recent">
-              {recentCommands.map((command) => {
-                const enhanced = enhancedCommands.find(c => c.id === command.id) || command;
-                return (
-                  <CommandItem
-                    key={command.id}
-                    value={command.label}
-                    onSelect={enhanced.onExecute}
-                  >
-                    <Clock className="mr-2 h-4 w-4" />
-                    <span>{command.label}</span>
-                    {command.description && (
-                      <span className="ml-auto text-xs text-muted-foreground">
-                        {command.description}
-                      </span>
-                    )}
-                    {command.shortcut && (
-                      <CommandShortcut>{command.shortcut}</CommandShortcut>
-                    )}
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
-            <CommandSeparator />
-          </>
-        )}
-        
-        <CommandGroup heading="Navigation">
-          {enhancedCommands.map((command) => (
-            <CommandItem
-              key={command.id}
-              value={command.label}
-              onSelect={command.onExecute}
-            >
-              {command.icon && <command.icon className="mr-2 h-4 w-4" />}
-              <span>{command.label}</span>
-              {command.description && (
-                <span className="ml-auto text-xs text-muted-foreground">
-                  {command.description}
-                </span>
-              )}
-              {command.shortcut && (
-                <CommandShortcut>{command.shortcut}</CommandShortcut>
-              )}
-            </CommandItem>
-          ))}
-        </CommandGroup>
-      </CommandList>
-    </CommandDialog>
+        <CommandInput placeholder="Type a command or search..." />
+        <CommandList>
+          <CommandEmpty>No results found.</CommandEmpty>
+          
+          {recentCommands.length > 0 && (
+            <>
+              <CommandGroup heading="Recent">
+                {recentCommands.map((command) => {
+                  const enhanced = enhancedCommands.find(c => c.id === command.id) || command;
+                  return (
+                    <CommandItem
+                      key={command.id}
+                      value={command.label}
+                      onSelect={enhanced.onExecute}
+                    >
+                      <Clock className="mr-2 h-4 w-4" />
+                      <span>{command.label}</span>
+                      {command.description && (
+                        <span className="ml-auto text-xs text-muted-foreground">
+                          {command.description}
+                        </span>
+                      )}
+                      {command.shortcut && (
+                        <CommandShortcut>{command.shortcut}</CommandShortcut>
+                      )}
+                    </CommandItem>
+                  );
+                })}
+              </CommandGroup>
+              <CommandSeparator />
+            </>
+          )}
+          
+          <CommandGroup heading="Navigation">
+            {enhancedCommands.map((command) => (
+              <CommandItem
+                key={command.id}
+                value={command.label}
+                onSelect={command.onExecute}
+              >
+                {command.icon && <command.icon className="mr-2 h-4 w-4" />}
+                <span>{command.label}</span>
+                {command.description && (
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {command.description}
+                  </span>
+                )}
+                {command.shortcut && (
+                  <CommandShortcut>{command.shortcut}</CommandShortcut>
+                )}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        </CommandList>
+      </CommandDialog>
   );
 }
 
