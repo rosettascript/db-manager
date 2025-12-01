@@ -415,6 +415,101 @@
   .sql-operator {
     color: hsl(var(--accent));
   }
+
+  /* Chart styling - Terminal theme */
+  .recharts-wrapper {
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .recharts-cartesian-axis-tick-value {
+    fill: hsl(var(--muted-foreground)) !important;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+
+  .recharts-legend-item-text {
+    fill: hsl(var(--foreground)) !important;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+
+  .recharts-tooltip-wrapper {
+    outline: none !important;
+  }
+
+  .recharts-default-tooltip {
+    background-color: hsl(var(--card)) !important;
+    border: 1px solid hsl(var(--border)) !important;
+    border-radius: 0 !important;
+    box-shadow: 0 0 10px hsl(var(--primary) / 0.2) !important;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .recharts-tooltip-label {
+    color: hsl(var(--primary)) !important;
+    font-weight: 600;
+  }
+
+  .recharts-tooltip-item {
+    color: hsl(var(--foreground)) !important;
+  }
+
+  /* Remove hover backgrounds - Terminal theme */
+  .recharts-rectangle.recharts-tooltip-cursor {
+    fill: transparent !important;
+    fill-opacity: 0 !important;
+  }
+
+  /* Remove all cursor backgrounds - no hover overlay */
+  .recharts-tooltip-cursor {
+    fill: transparent !important;
+    fill-opacity: 0 !important;
+  }
+
+  .recharts-curve.recharts-tooltip-cursor {
+    stroke: hsl(var(--primary)) !important;
+    stroke-width: 1px !important;
+    stroke-opacity: 0.5 !important;
+    fill: none !important;
+    fill-opacity: 0 !important;
+  }
+
+  /* Remove any background fills on hover */
+  .recharts-active-bar,
+  .recharts-active-shape {
+    fill-opacity: 1 !important;
+  }
+
+  /* Ensure no hover background on any chart element */
+  .terminal-chart-container .recharts-tooltip-cursor {
+    fill: transparent !important;
+    fill-opacity: 0 !important;
+    opacity: 0 !important;
+  }
+
+  /* Chart glow effects */
+  .recharts-bar-rectangle {
+    filter: drop-shadow(0 0 3px hsl(var(--primary) / 0.4));
+  }
+
+  .recharts-line-path {
+    filter: drop-shadow(0 0 4px hsl(var(--primary) / 0.3));
+  }
+
+  .recharts-pie-sector {
+    filter: drop-shadow(0 0 3px hsl(var(--primary) / 0.3));
+  }
+
+  /* Chart container styling */
+  .terminal-chart-container {
+    background: hsl(var(--card));
+    border: 1px solid hsl(var(--border));
+    padding: 1.5rem;
+  }
+
+  .terminal-chart-container svg {
+    font-family: 'JetBrains Mono', monospace;
+  }
 }
 
 @layer components {

@@ -24,7 +24,11 @@ export const ChartBuilder = ({
   const [xAxisColumn, setXAxisColumn] = useState<string>("");
   const [yAxisColumns, setYAxisColumns] = useState<string[]>([]);
   const [aggregation, setAggregation] = useState<AggregationFunction>("COUNT");
-  const [limit, setLimit] = useState<number>(100);
+  // Default limit: 500 points balances performance and detail
+  // - 100-500: Optimal for most charts (fast, readable)
+  // - 500-2000: Good for detailed analysis (still performant)
+  // - 2000-10000: Use for large datasets (may be slower)
+  const [limit, setLimit] = useState<number>(500);
 
   // Get available column names
   const columnNames = useMemo(() => {
@@ -214,9 +218,12 @@ export const ChartBuilder = ({
             min={1}
             max={10000}
             value={limit}
-            onChange={(e) => setLimit(parseInt(e.target.value) || 100)}
-            className="w-full px-3 py-2 border rounded-md"
+            onChange={(e) => setLimit(parseInt(e.target.value) || 500)}
+            className="w-full px-3 py-2 border rounded-md bg-background text-foreground"
           />
+          <p className="text-xs text-muted-foreground">
+            Recommended: 100-500 for best performance. Up to 10,000 allowed.
+          </p>
         </div>
 
         <Button

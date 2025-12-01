@@ -12,7 +12,18 @@ interface ChartViewerProps {
   height?: number;
 }
 
-const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#84cc16'];
+// Terminal/Hacker theme colors matching the app theme
+// Matrix green primary, amber accent, cyan info, and variations
+const COLORS = [
+  'hsl(120, 100%, 50%)',  // Matrix green primary
+  'hsl(45, 100%, 50%)',   // Amber accent
+  'hsl(180, 100%, 50%)',  // Cyan info
+  'hsl(120, 100%, 70%)',  // Bright green
+  'hsl(45, 100%, 65%)',   // Bright amber
+  'hsl(180, 100%, 65%)',  // Bright cyan
+  'hsl(120, 70%, 60%)',   // Muted green
+  'hsl(45, 70%, 55%)',    // Muted amber
+];
 
 export const ChartViewer = ({ chartData, height = 400 }: ChartViewerProps) => {
   const { chartType, data, metadata, error } = chartData;
@@ -141,20 +152,64 @@ export const ChartViewer = ({ chartData, height = 400 }: ChartViewerProps) => {
       case 'bar':
         return (
           <ResponsiveContainer width="100%" height={height}>
-            <BarChart data={transformedData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              {isMultiSeries ? <Legend /> : null}
+            <BarChart data={transformedData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid 
+                strokeDasharray="3 3" 
+                stroke="hsl(var(--border))"
+                strokeOpacity={0.3}
+              />
+              <XAxis 
+                dataKey="name" 
+                stroke="hsl(var(--foreground))"
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12, fontFamily: 'JetBrains Mono' }}
+                axisLine={{ stroke: 'hsl(var(--border))' }}
+              />
+              <YAxis 
+                stroke="hsl(var(--foreground))"
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12, fontFamily: 'JetBrains Mono' }}
+                axisLine={{ stroke: 'hsl(var(--border))' }}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'hsl(var(--card))',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '0',
+                  color: 'hsl(var(--foreground))',
+                  fontFamily: 'JetBrains Mono',
+                  fontSize: '12px',
+                  boxShadow: '0 0 10px hsl(var(--primary) / 0.2)',
+                }}
+                labelStyle={{ color: 'hsl(var(--primary))' }}
+                itemStyle={{ color: 'hsl(var(--foreground))' }}
+                cursor={{ fill: 'transparent', stroke: 'hsl(var(--primary))', strokeWidth: 1, strokeOpacity: 0.5 }}
+              />
+              {isMultiSeries ? (
+                <Legend 
+                  wrapperStyle={{ color: 'hsl(var(--foreground))', fontFamily: 'JetBrains Mono', fontSize: '12px' }}
+                  iconType="square"
+                />
+              ) : null}
               {yAxisColumns.map((col, idx) => (
                 <Bar
                   key={col}
                   dataKey={col}
                   fill={COLORS[idx % COLORS.length]}
+                  stroke={COLORS[idx % COLORS.length]}
+                  strokeWidth={1}
+                  radius={[0, 0, 0, 0]}
+                  style={{ filter: `drop-shadow(0 0 3px ${COLORS[idx % COLORS.length]})` }}
                 />
               ))}
-              {!isMultiSeries && <Bar dataKey="value" fill={COLORS[0]} />}
+              {!isMultiSeries && (
+                <Bar 
+                  dataKey="value" 
+                  fill={COLORS[0]} 
+                  stroke={COLORS[0]}
+                  strokeWidth={1}
+                  radius={[0, 0, 0, 0]}
+                  style={{ filter: `drop-shadow(0 0 3px ${COLORS[0]})` }}
+                />
+              )}
             </BarChart>
           </ResponsiveContainer>
         );
@@ -162,23 +217,65 @@ export const ChartViewer = ({ chartData, height = 400 }: ChartViewerProps) => {
       case 'line':
         return (
           <ResponsiveContainer width="100%" height={height}>
-            <LineChart data={transformedData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              {isMultiSeries ? <Legend /> : null}
+            <LineChart data={transformedData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+              <CartesianGrid 
+                strokeDasharray="3 3" 
+                stroke="hsl(var(--border))"
+                strokeOpacity={0.3}
+              />
+              <XAxis 
+                dataKey="name" 
+                stroke="hsl(var(--foreground))"
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12, fontFamily: 'JetBrains Mono' }}
+                axisLine={{ stroke: 'hsl(var(--border))' }}
+              />
+              <YAxis 
+                stroke="hsl(var(--foreground))"
+                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12, fontFamily: 'JetBrains Mono' }}
+                axisLine={{ stroke: 'hsl(var(--border))' }}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'hsl(var(--card))',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '0',
+                  color: 'hsl(var(--foreground))',
+                  fontFamily: 'JetBrains Mono',
+                  fontSize: '12px',
+                  boxShadow: '0 0 10px hsl(var(--primary) / 0.2)',
+                }}
+                labelStyle={{ color: 'hsl(var(--primary))' }}
+                itemStyle={{ color: 'hsl(var(--foreground))' }}
+                cursor={{ fill: 'transparent', stroke: 'hsl(var(--primary))', strokeWidth: 1, strokeOpacity: 0.5 }}
+              />
+              {isMultiSeries ? (
+                <Legend 
+                  wrapperStyle={{ color: 'hsl(var(--foreground))', fontFamily: 'JetBrains Mono', fontSize: '12px' }}
+                  iconType="line"
+                />
+              ) : null}
               {yAxisColumns.map((col, idx) => (
                 <Line
                   key={col}
                   type="monotone"
                   dataKey={col}
                   stroke={COLORS[idx % COLORS.length]}
-                  strokeWidth={2}
+                  strokeWidth={3}
+                  dot={{ fill: COLORS[idx % COLORS.length], r: 4, strokeWidth: 2, stroke: 'hsl(var(--card))' }}
+                  activeDot={{ r: 6, fill: COLORS[idx % COLORS.length] }}
+                  style={{ filter: `drop-shadow(0 0 4px ${COLORS[idx % COLORS.length]})` }}
                 />
               ))}
               {!isMultiSeries && (
-                <Line type="monotone" dataKey="value" stroke={COLORS[0]} strokeWidth={2} />
+                <Line 
+                  type="monotone" 
+                  dataKey="value" 
+                  stroke={COLORS[0]} 
+                  strokeWidth={3}
+                  dot={{ fill: COLORS[0], r: 4, strokeWidth: 2, stroke: 'hsl(var(--card))' }}
+                  activeDot={{ r: 6, fill: COLORS[0] }}
+                  style={{ filter: `drop-shadow(0 0 4px ${COLORS[0]})` }}
+                />
               )}
             </LineChart>
           </ResponsiveContainer>
@@ -195,14 +292,38 @@ export const ChartViewer = ({ chartData, height = 400 }: ChartViewerProps) => {
                 cx="50%"
                 cy="50%"
                 outerRadius={Math.min(height / 3, 150)}
-                label
+                label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                labelLine={false}
+                style={{ filter: 'drop-shadow(0 0 4px hsl(var(--primary) / 0.3))' }}
               >
                 {transformedData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={COLORS[index % COLORS.length]}
+                    stroke="hsl(var(--card))"
+                    strokeWidth={2}
+                    style={{ filter: `drop-shadow(0 0 3px ${COLORS[index % COLORS.length]})` }}
+                  />
                 ))}
               </Pie>
-              <Tooltip />
-              <Legend />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: 'hsl(var(--card))',
+                  border: '1px solid hsl(var(--border))',
+                  borderRadius: '0',
+                  color: 'hsl(var(--foreground))',
+                  fontFamily: 'JetBrains Mono',
+                  fontSize: '12px',
+                  boxShadow: '0 0 10px hsl(var(--primary) / 0.2)',
+                }}
+                labelStyle={{ color: 'hsl(var(--primary))' }}
+                itemStyle={{ color: 'hsl(var(--foreground))' }}
+                cursor={false}
+              />
+              <Legend 
+                wrapperStyle={{ color: 'hsl(var(--foreground))', fontFamily: 'JetBrains Mono', fontSize: '12px' }}
+                iconType="square"
+              />
             </PieChart>
           </ResponsiveContainer>
         );
@@ -252,7 +373,7 @@ export const ChartViewer = ({ chartData, height = 400 }: ChartViewerProps) => {
           </div>
         </div>
       </CardHeader>
-      <CardContent ref={chartContainerRef}>
+      <CardContent ref={chartContainerRef} className="terminal-chart-container">
         {renderChart()}
       </CardContent>
     </Card>
