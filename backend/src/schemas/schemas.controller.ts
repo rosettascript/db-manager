@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Delete, Param, Query, Body, HttpCode, HttpStatus } from '@nestjs/common';
 import { SchemasService } from './schemas.service';
-import { Schema, Table, DatabaseStats } from './interfaces/schema.interface';
+import { Schema, Table, DatabaseStats, DatabaseFunction, DatabaseView, DatabaseIndex, FunctionCategory, FunctionDetails, ViewDetails, IndexDetails } from './interfaces/schema.interface';
 import { DeleteTableDto, DeleteSchemaDto } from './dto';
 
 @Controller('connections/:connectionId/db')
@@ -37,6 +37,83 @@ export class SchemasController {
     @Query('schema') schema?: string,
   ): Promise<Table[]> {
     return this.schemasService.getTables(connectionId, schema);
+  }
+
+  /**
+   * Get all functions (optionally filtered by schema and category)
+   * GET /api/connections/:connectionId/db/functions?schema=public&category=user
+   */
+  @Get('functions')
+  async getFunctions(
+    @Param('connectionId') connectionId: string,
+    @Query('schema') schema?: string,
+    @Query('category') category?: FunctionCategory,
+  ): Promise<DatabaseFunction[]> {
+    return this.schemasService.getFunctions(connectionId, schema, category);
+  }
+
+  /**
+   * Get all views (optionally filtered by schema)
+   * GET /api/connections/:connectionId/db/views?schema=public
+   */
+  @Get('views')
+  async getViews(
+    @Param('connectionId') connectionId: string,
+    @Query('schema') schema?: string,
+  ): Promise<DatabaseView[]> {
+    return this.schemasService.getViews(connectionId, schema);
+  }
+
+  /**
+   * Get all indexes (optionally filtered by schema)
+   * GET /api/connections/:connectionId/db/indexes?schema=public
+   */
+  @Get('indexes')
+  async getIndexes(
+    @Param('connectionId') connectionId: string,
+    @Query('schema') schema?: string,
+  ): Promise<DatabaseIndex[]> {
+    return this.schemasService.getIndexes(connectionId, schema);
+  }
+
+  /**
+   * Get function details
+   * GET /api/connections/:connectionId/db/functions/:schema/:functionName
+   */
+  @Get('functions/:schema/:functionName')
+  async getFunctionDetails(
+    @Param('connectionId') connectionId: string,
+    @Param('schema') schema: string,
+    @Param('functionName') functionName: string,
+    @Query('parameters') parameters?: string,
+  ): Promise<FunctionDetails> {
+    return this.schemasService.getFunctionDetails(connectionId, schema, functionName, parameters);
+  }
+
+  /**
+   * Get view details
+   * GET /api/connections/:connectionId/db/views/:schema/:viewName
+   */
+  @Get('views/:schema/:viewName')
+  async getViewDetails(
+    @Param('connectionId') connectionId: string,
+    @Param('schema') schema: string,
+    @Param('viewName') viewName: string,
+  ): Promise<ViewDetails> {
+    return this.schemasService.getViewDetails(connectionId, schema, viewName);
+  }
+
+  /**
+   * Get index details
+   * GET /api/connections/:connectionId/db/indexes/:schema/:indexName
+   */
+  @Get('indexes/:schema/:indexName')
+  async getIndexDetails(
+    @Param('connectionId') connectionId: string,
+    @Param('schema') schema: string,
+    @Param('indexName') indexName: string,
+  ): Promise<IndexDetails> {
+    return this.schemasService.getIndexDetails(connectionId, schema, indexName);
   }
 
   /**

@@ -48,3 +48,52 @@ export interface DatabaseStats {
   totalSizeBytes: number;
 }
 
+export type FunctionCategory = 'user' | 'extension' | 'system';
+
+export interface DatabaseFunction {
+  id: string;
+  name: string;
+  schema: string;
+  language: string;
+  returnType: string;
+  parameters: string;
+  owner: string;
+  category: FunctionCategory;
+  extensionName?: string;
+}
+
+export interface DatabaseView {
+  id: string;
+  name: string;
+  schema: string;
+  owner: string;
+}
+
+export interface DatabaseIndex {
+  id: string;
+  name: string;
+  schema: string;
+  tableSchema: string;
+  tableName: string;
+  type: string;
+  unique: boolean;
+  columns: string[];
+}
+
+// Detailed interfaces for viewer pages
+export interface FunctionDetails extends DatabaseFunction {
+  definition: string;
+}
+
+export interface ViewDetails extends DatabaseView {
+  definition: string;
+}
+
+export interface IndexDetails extends DatabaseIndex {
+  definition: string;
+  size?: string;
+  sizeBytes?: number;
+  isUsed?: boolean;
+  indexScans?: number;
+}
+

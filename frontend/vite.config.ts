@@ -13,6 +13,10 @@ export default defineConfig(({ mode }) => {
       host: "::",
       port: Number(env.VITE_PORT) || 8080,
     },
+    preview: {
+      host: "::",
+      port: Number(env.VITE_PREVIEW_PORT) || Number(env.VITE_PORT) || 8080,
+    },
     plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
     resolve: {
       alias: {
@@ -22,91 +26,64 @@ export default defineConfig(({ mode }) => {
     build: {
       rollupOptions: {
         output: {
+          // Ensure proper chunk loading order
+          entryFileNames: 'assets/[name]-[hash].js',
+          chunkFileNames: 'assets/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash].[ext]',
           manualChunks: (id) => {
-            // React and React DOM
-            if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
+            // Strategy: Bundle all React-related code together to avoid dependency issues
+            // Only split out very large, clearly non-React libraries
+            
+            // React and all React-dependent libraries go into react-vendor
+            if (
+              id.includes('node_modules/react/') ||
+              id.includes('node_modules/react-dom/') ||
+              id.includes('node_modules/@radix-ui') ||
+              id.includes('node_modules/react-router') ||
+              id.includes('node_modules/@tanstack/react') ||
+              id.includes('node_modules/react-hook-form') ||
+              id.includes('node_modules/@hookform') ||
+              id.includes('node_modules/react-day-picker') ||
+              id.includes('node_modules/next-themes') ||
+              id.includes('node_modules/cmdk') ||
+              id.includes('node_modules/react-resizable-panels') ||
+              id.includes('node_modules/embla-carousel-react') ||
+              id.includes('node_modules/recharts') ||
+              id.includes('node_modules/lucide-react') ||
+              id.includes('node_modules/vaul') ||
+              id.includes('node_modules/input-otp') ||
+              id.includes('node_modules/sonner') ||
+              id.includes('node_modules/reactflow') ||
+              id.includes('node_modules/@xyflow')
+            ) {
               return 'react-vendor';
             }
             
-            // React Router
-            if (id.includes('node_modules/react-router')) {
-              return 'router-vendor';
-            }
-            
-            // React Query
-            if (id.includes('node_modules/@tanstack/react-query')) {
-              return 'query-vendor';
-            }
-            
-            // ReactFlow (large library)
-            if (id.includes('node_modules/reactflow') || id.includes('node_modules/@xyflow')) {
-              return 'reactflow-vendor';
-            }
-            
-            // ELK.js - exclude from manual chunking to allow dynamic import code splitting
-            // It will be loaded on-demand when hierarchical layout is used
+            // ELK.js - exclude from manual chunking (loaded dynamically)
             if (id.includes('node_modules/elkjs')) {
-              return undefined; // Let Vite handle dynamic import splitting
+              return undefined;
             }
             
-            // Recharts (charting library)
-            if (id.includes('node_modules/recharts')) {
-              return 'recharts-vendor';
-            }
-            
-            // Radix UI components (split into one chunk)
-            if (id.includes('node_modules/@radix-ui')) {
-              return 'radix-vendor';
-            }
-            
-            // Other large UI libraries
-            if (id.includes('node_modules/lucide-react')) {
-              return 'icons-vendor';
-            }
-            
+            // Only split out the very largest, clearly standalone libraries
+            // Put everything else with React to avoid any dependency issues
             if (id.includes('node_modules/html-to-image')) {
               return 'html-to-image-vendor';
             }
             
-            // Form libraries
-            if (id.includes('node_modules/react-hook-form') || id.includes('node_modules/@hookform')) {
-              return 'forms-vendor';
-            }
-            
-            // Date libraries
-            if (id.includes('node_modules/date-fns') || id.includes('node_modules/react-day-picker')) {
-              return 'date-vendor';
-            }
-            
-            // Virtual scrolling
-            if (id.includes('node_modules/@tanstack/react-virtual')) {
-              return 'virtual-vendor';
-            }
-            
-            // Split other large libraries that might be in vendor chunk
-            // ReactFlow dependencies
             if (id.includes('node_modules/d3-') || id.includes('node_modules/dagre')) {
               return 'd3-vendor';
             }
             
-            // Zod (validation library - used in many places but can be split)
-            if (id.includes('node_modules/zod')) {
-              return 'zod-vendor';
-            }
-            
-            // Sonner (toast notifications)
-            if (id.includes('node_modules/sonner')) {
-              return 'sonner-vendor';
-            }
-            
-            // Other node_modules (but exclude ELK.js which is handled by dynamic import)
-            if (id.includes('node_modules') && !id.includes('node_modules/elkjs')) {
-              return 'vendor';
+            // Put everything else (including date-fns, zod, clsx, etc.) with React
+            // This ensures no cross-chunk dependency issues
+            // The react-vendor chunk will be larger, but it's safer
+            if (id.includes('node_modules')) {
+              return 'react-vendor';
             }
           },
         },
       },
-      chunkSizeWarningLimit: 1000, // Increase limit to 1MB since we're splitting chunks
+      chunkSizeWarningLimit: 1000,
     },
   };
 });

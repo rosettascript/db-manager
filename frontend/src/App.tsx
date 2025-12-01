@@ -17,6 +17,9 @@ import { queryConfig } from "@/lib/query/queryConfig";
 // Lazy load pages for code splitting
 const Index = lazy(() => import("./pages/Index"));
 const TableViewer = lazy(() => import("./pages/TableViewer"));
+const FunctionViewer = lazy(() => import("./pages/FunctionViewer"));
+const ViewViewer = lazy(() => import("./pages/ViewViewer"));
+const IndexViewer = lazy(() => import("./pages/IndexViewer"));
 const ERDiagram = lazy(() => import("./pages/ERDiagram"));
 const QueryBuilder = lazy(() => import("./pages/QueryBuilder"));
 const IndexRecommendations = lazy(() => import("./pages/IndexRecommendations"));
@@ -91,6 +94,36 @@ const App = () => (
               <Route
                 path="/table/:tableId"
                 element={<TableRouteWrapper />}
+              />
+              <Route
+                path="/function/:functionId"
+                element={
+                  <MainLayout>
+                    <Suspense fallback={<PageLoader />}>
+                      <FunctionViewer />
+                    </Suspense>
+                  </MainLayout>
+                }
+              />
+              <Route
+                path="/view/:viewId"
+                element={
+                  <MainLayout>
+                    <Suspense fallback={<PageLoader />}>
+                      <ViewViewer />
+                    </Suspense>
+                  </MainLayout>
+                }
+              />
+              <Route
+                path="/index/:indexId"
+                element={
+                  <MainLayout>
+                    <Suspense fallback={<PageLoader />}>
+                      <IndexViewer />
+                    </Suspense>
+                  </MainLayout>
+                }
               />
               <Route
                 path="/diagram"
