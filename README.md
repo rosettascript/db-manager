@@ -1,14 +1,18 @@
 # DB Manager
 
-A powerful, modern web-based PostgreSQL database management and visualization tool built with React and NestJS. Manage multiple database connections, explore schemas, execute queries, visualize relationships, and export data—all from a beautiful, intuitive interface.
+A powerful, modern PostgreSQL database management and visualization tool built with React and NestJS. Manage multiple database connections, explore schemas, execute queries, visualize relationships, and export data—all from a beautiful, intuitive interface.
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
+
+> **🖥️ NEW: Desktop App Available!** 
+> You can now run DB Manager as a standalone desktop application for Windows, macOS, and Linux. See the [Desktop App](#-desktop-application) section below.
 
 ---
 
 ## 📋 Table of Contents
 
 - [Features](#features)
+- [Desktop Application](#-desktop-application)
 - [Tech Stack](#tech-stack)
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
@@ -64,6 +68,40 @@ A powerful, modern web-based PostgreSQL database management and visualization to
 - **Full-Text Search**: Search across database metadata
 - **Dark Mode**: Beautiful dark/light theme support
 - **Responsive Design**: Works seamlessly on desktop and tablet
+
+---
+
+## 🖥️ Desktop Application
+
+DB Manager is also available as a **standalone desktop application**! No web server setup needed - just install and run.
+
+### Features
+- ✅ **Single executable** - No `npm run dev` needed
+- ✅ **Cross-platform** - Windows, macOS, Linux
+- ✅ **Offline-ready** - Works without internet
+- ✅ **Native experience** - Desktop file dialogs, notifications
+- ✅ **Portable** - All data stored locally
+- ✅ **Same features** - Identical to the web version
+
+### Quick Start (Desktop)
+
+```bash
+# 1. Navigate to desktop folder
+cd desktop
+
+# 2. Install dependencies
+npm install
+
+# 3. Build the desktop app
+npm run build
+
+# 4. Find installer in desktop/dist/
+# - Windows: DB Manager Setup 1.0.0.exe
+# - macOS: DB Manager-1.0.0.dmg
+# - Linux: DB-Manager-1.0.0.AppImage
+```
+
+**Full documentation:** See [desktop/README.md](./desktop/README.md) and [desktop/QUICK_START.md](./desktop/QUICK_START.md)
 
 ---
 

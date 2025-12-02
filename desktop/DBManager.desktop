@@ -1,0 +1,10 @@
+[Desktop Entry]
+Name=DB Manager
+Comment=PostgreSQL Database Management Tool
+Exec=/home/kim/CG3_Tech/Projects/Personal Project 2025/db-manager/desktop/dist/launch-dbmanager.sh
+Icon=database
+Terminal=false
+Type=Application
+Categories=Development;Database;
+StartupNotify=true
+

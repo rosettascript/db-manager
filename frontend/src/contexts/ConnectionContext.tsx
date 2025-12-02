@@ -28,6 +28,7 @@ interface ConnectionProviderProps {
 }
 
 export const ConnectionProvider: React.FC<ConnectionProviderProps> = ({ children }) => {
+  
   const queryClient = useQueryClient();
   const [activeConnectionId, setActiveConnectionId] = useState<string | null>(() => {
     // Try to load from localStorage
@@ -40,6 +41,8 @@ export const ConnectionProvider: React.FC<ConnectionProviderProps> = ({ children
 
   // Fetch all connections with optimized query options
   const connectionsOptions = getDefaultQueryOptions('connections');
+  
+  
   const {
     data: connections = [],
     isLoading,
@@ -48,7 +51,23 @@ export const ConnectionProvider: React.FC<ConnectionProviderProps> = ({ children
     refetch: refreshConnections,
   } = useQuery<Connection[]>({
     queryKey: queryKeys.connections.all,
-    queryFn: () => connectionsService.list(),
+    queryFn: async () => {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/33f2f112-059c-4e50-a06d-531fbaf44b2a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConnectionContext.tsx:60',message:'Fetching connections',data:{},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H8'})}).catch(()=>{});
+      // #endregion
+      try {
+        const result = await connectionsService.list();
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/33f2f112-059c-4e50-a06d-531fbaf44b2a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConnectionContext.tsx:66',message:'Connections fetched successfully',data:{count:result?.length},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H8'})}).catch(()=>{});
+        // #endregion
+        return result;
+      } catch (err: any) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/33f2f112-059c-4e50-a06d-531fbaf44b2a',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConnectionContext.tsx:72',message:'Failed to fetch connections',data:{error:err?.message,stack:err?.stack},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'H8'})}).catch(()=>{});
+        // #endregion
+        throw err;
+      }
+    },
     ...connectionsOptions,
   });
 

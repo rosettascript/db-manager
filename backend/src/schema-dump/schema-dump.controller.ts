@@ -69,5 +69,41 @@ export class SchemaDumpController {
       );
     }
   }
+
+  @Get(':connectionId/:schema/:table')
+  async getTableDDL(
+    @Param('connectionId') connectionId: string,
+    @Param('schema') schema: string,
+    @Param('table') table: string,
+    @Query('includeDrops', new DefaultValuePipe(false), ParseBoolPipe) includeDrops: boolean,
+    @Res() res: Response,
+  ) {
+    if (!connectionId || !schema || !table) {
+      throw new BadRequestException('Connection ID, schema, and table are required');
+    }
+
+    const options = {
+      includeDrops,
+    };
+
+    try {
+      const ddl = await this.schemaDumpService.generateTableDDL(
+        connectionId,
+        schema,
+        table,
+        options,
+      );
+
+      res.setHeader('Content-Type', 'text/plain');
+      return res.send(ddl);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(
+        `Failed to generate table DDL: ${error.message}`,
+      );
+    }
+  }
 }
 

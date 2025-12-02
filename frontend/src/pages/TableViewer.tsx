@@ -22,6 +22,7 @@ import { useConnection } from "@/contexts/ConnectionContext";
 import { schemasService } from "@/lib/api/services/schemas.service";
 import { dataService } from "@/lib/api/services/data.service";
 import { chartsService } from "@/lib/api/services/charts.service";
+import { schemaDumpService } from "@/lib/api/services/schema-dump.service";
 import type { Table as TableType, FilterRule, ChartOptions, ChartDataResponse } from "@/lib/api/types";
 import { ChartBuilder } from "@/components/charts/ChartBuilder";
 import { ChartViewer } from "@/components/charts/ChartViewer";
@@ -219,6 +220,32 @@ const TableViewer = () => {
   
   // Use previous table if current is loading (for smooth transitions)
   const displayTable = table || previousTable;
+
+  // Fetch table DDL
+  const {
+    data: tableDDL,
+    isLoading: ddlLoading,
+    isError: ddlError,
+    error: ddlErrorDetails,
+  } = useQuery({
+    queryKey: [
+      'table-ddl',
+      activeConnection?.id,
+      parsedTable?.schema,
+      parsedTable?.tableName,
+    ],
+    queryFn: () => schemaDumpService.getTableDDL(
+      activeConnection!.id,
+      parsedTable!.schema,
+      parsedTable!.tableName,
+      { includeDrops: false },
+    ),
+    enabled: !!activeConnection && activeConnection.status === 'connected' && !!parsedTable,
+    staleTime: 300000, // Consider fresh for 5 minutes
+    gcTime: 300000, // Keep in cache for 5 minutes
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
+  });
 
   // Fetch table data
   const {
@@ -1425,6 +1452,7 @@ const TableViewer = () => {
             <TabsTrigger value="structure">Structure</TabsTrigger>
             <TabsTrigger value="indexes">Indexes</TabsTrigger>
             <TabsTrigger value="relationships">Relationships</TabsTrigger>
+            <TabsTrigger value="ddl">DDL</TabsTrigger>
           </TabsList>
         </div>
 
@@ -2095,6 +2123,53 @@ const TableViewer = () => {
                     Incoming relationships will be available in a future update. Use the ER Diagram view to see all relationships.
                   </p>
                 </div>
+                </div>
+              )}
+            </div>
+          </TabsContent>
+
+          <TabsContent value="ddl" className="mt-0" forceMount>
+            <div className="p-6">
+              {ddlLoading && !tableDDL ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-3/4" />
+                </div>
+              ) : ddlError ? (
+                <ErrorDisplay
+                  error={ddlErrorDetails}
+                  title="Failed to load DDL"
+                  onRetry={() => queryClient.invalidateQueries({
+                    queryKey: ['table-ddl', activeConnection?.id, parsedTable?.schema, parsedTable?.tableName],
+                  })}
+                />
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold">Table DDL</h3>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          if (tableDDL) {
+                            navigator.clipboard.writeText(tableDDL);
+                            toast.success('DDL copied to clipboard');
+                          }
+                        }}
+                        disabled={!tableDDL}
+                      >
+                        <Copy className="w-4 h-4 mr-2" />
+                        Copy
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="relative rounded-lg border bg-code-bg overflow-hidden">
+                    <pre className="p-4 overflow-auto font-mono text-sm leading-relaxed whitespace-pre-wrap break-words">
+                      <code>{tableDDL || '-- No DDL available'}</code>
+                    </pre>
+                  </div>
                 </div>
               )}
             </div>

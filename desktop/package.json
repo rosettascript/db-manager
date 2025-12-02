@@ -1,0 +1,103 @@
+{
+  "name": "db-manager-desktop",
+  "version": "1.0.0",
+  "description": "Desktop application for DB Manager",
+  "main": "main.js",
+  "author": {
+    "name": "DB Manager Team",
+    "email": "dev@dbmanager.local"
+  },
+  "homepage": "https://github.com/yourusername/db-manager",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "check-ports": "node check-ports.js",
+    "build": "npm run build:backend && npm run build:frontend && electron-builder",
+    "build:backend": "cd ../backend && npm run build",
+    "build:frontend": "cd ../frontend && npm run build",
+    "build:win": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "build": {
+    "appId": "com.dbmanager.desktop",
+    "productName": "DBManager",
+    "asar": false,
+    "directories": {
+      "output": "dist",
+      "buildResources": "assets"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "backend-server.js"
+    ],
+    "extraResources": [
+      {
+        "from": "../backend/dist",
+        "to": "app/backend/dist"
+      },
+      {
+        "from": "../backend/node_modules",
+        "to": "app/backend/node_modules"
+      },
+      {
+        "from": "../backend/package.json",
+        "to": "app/backend/package.json"
+      },
+      {
+        "from": "../backend/.env",
+        "to": "app/backend/.env"
+      },
+      {
+        "from": "../frontend/dist",
+        "to": "app/frontend/dist",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../backend/database",
+        "to": "database"
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "icon": "assets/icon.png",
+      "category": "Development",
+      "maintainer": "DB Manager Team <dev@dbmanager.local>",
+      "executableName": "db-manager"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  },
+  "dependencies": {
+    "electron-store": "^8.1.0"
+  },
+  "devDependencies": {
+    "electron": "^28.1.0",
+    "electron-builder": "^24.9.1"
+  }
+}

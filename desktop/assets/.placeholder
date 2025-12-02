@@ -1,0 +1,16 @@
+# Icon Assets
+
+Place your application icons here:
+
+- **icon.png** - 512x512 PNG (for Linux)
+- **icon.ico** - Windows icon
+- **icon.icns** - macOS icon
+
+You can generate these from a single high-res PNG using:
+```bash
+npm install -g electron-icon-builder
+electron-icon-builder --input=./icon.png --output=./
+```
+
+
+

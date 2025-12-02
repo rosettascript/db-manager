@@ -9,6 +9,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   
   return {
+    base: './', // Use relative paths for assets (needed for Electron)
     server: {
       host: "::",
       port: Number(env.VITE_PORT) || 8080,

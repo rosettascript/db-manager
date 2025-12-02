@@ -1,0 +1,11 @@
+{
+  "name": "electron-test",
+  "version": "1.0.0",
+  "main": "minimal-main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "electron": "^28.1.0"
+  }
+}

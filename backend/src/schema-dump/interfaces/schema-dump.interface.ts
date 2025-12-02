@@ -29,6 +29,7 @@ export interface Sequence {
 export interface TableColumn {
   name: string;
   dataType: string;
+  udtName?: string; // User-defined type name (useful for arrays)
   isNullable: boolean;
   defaultValue: string | null;
   characterMaximumLength: number | null;

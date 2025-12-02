@@ -20,6 +20,21 @@ import {
   SchemaDumpOptions,
 } from './interfaces/schema-dump.interface';
 
+/**
+ * Local interface for grouped foreign keys (used internally)
+ */
+interface GroupedForeignKey {
+  name: string;
+  schema: string;
+  tableName: string;
+  columns: string[];
+  referencedSchema: string;
+  referencedTable: string;
+  referencedColumns: string[];
+  onUpdate: string;
+  onDelete: string;
+}
+
 @Injectable()
 export class SchemaDumpService {
   private readonly logger = new Logger(SchemaDumpService.name);
@@ -68,6 +83,415 @@ export class SchemaDumpService {
     );
 
     return sql;
+  }
+
+  /**
+   * Generate DDL for a single table
+   */
+  async generateTableDDL(
+    connectionId: string,
+    schema: string,
+    tableName: string,
+    options: SchemaDumpOptions = {},
+  ): Promise<string> {
+    const pool = this.connectionManager.getPool(connectionId);
+    if (!pool) {
+      throw new NotFoundException(
+        `Connection ${connectionId} not found or not connected`,
+      );
+    }
+
+    this.logger.log(
+      `Generating DDL for table ${schema}.${tableName} in connection ${connectionId}`,
+    );
+
+    // Extract table components
+    const table = await this.extractSingleTable(pool, schema, tableName);
+    if (!table) {
+      throw new NotFoundException(
+        `Table ${schema}.${tableName} not found`,
+      );
+    }
+
+    // Get indexes for this table
+    const indexes = await this.extractTableIndexes(pool, schema, tableName);
+
+    // Get foreign keys for this table
+    const foreignKeys = await this.extractTableForeignKeys(pool, schema, tableName);
+
+    // Generate DDL
+    const ddl = this.generateTableSQL(table, indexes, foreignKeys, options);
+
+    return ddl;
+  }
+
+  /**
+   * Extract a single table
+   */
+  private async extractSingleTable(
+    pool: Pool,
+    schema: string,
+    tableName: string,
+  ): Promise<Table | null> {
+    // Check if table exists
+    const tableExistsResult = await pool.query(
+      `SELECT EXISTS (
+        SELECT 1 
+        FROM information_schema.tables 
+        WHERE table_schema = $1 AND table_name = $2
+      ) as exists;`,
+      [schema, tableName],
+    );
+
+    if (!tableExistsResult.rows[0].exists) {
+      return null;
+    }
+
+    // Get table owner
+    const ownerResult = await pool.query(
+      `SELECT pg_get_userbyid(c.relowner) as owner
+       FROM pg_class c
+       JOIN pg_namespace n ON n.oid = c.relnamespace
+       WHERE n.nspname = $1 AND c.relname = $2;`,
+      [schema, tableName],
+    );
+    const owner = ownerResult.rows[0]?.owner || '';
+
+    // Get columns with better type information
+    const columnsQuery = `
+      SELECT 
+        column_name,
+        data_type,
+        udt_name,
+        is_nullable,
+        column_default,
+        character_maximum_length,
+        numeric_precision,
+        numeric_scale
+      FROM information_schema.columns
+      WHERE table_schema = $1 AND table_name = $2
+      ORDER BY ordinal_position;
+    `;
+
+    const columnsResult = await pool.query(columnsQuery, [schema, tableName]);
+    const columns: TableColumn[] = columnsResult.rows.map((row) => ({
+      name: row.column_name,
+      dataType: row.data_type,
+      udtName: row.udt_name || undefined, // Store UDT name for arrays
+      isNullable: row.is_nullable === 'YES',
+      defaultValue: row.column_default,
+      characterMaximumLength: row.character_maximum_length,
+      numericPrecision: row.numeric_precision,
+      numericScale: row.numeric_scale,
+    }));
+
+    // Get constraints (excluding foreign keys - handled separately)
+    const constraintsQuery = `
+      SELECT 
+        tc.constraint_name,
+        tc.constraint_type,
+        kcu.column_name,
+        cc.check_clause
+      FROM information_schema.table_constraints tc
+      LEFT JOIN information_schema.key_column_usage kcu 
+        ON tc.constraint_name = kcu.constraint_name 
+        AND tc.table_schema = kcu.table_schema
+        AND tc.table_name = kcu.table_name
+      LEFT JOIN information_schema.check_constraints cc
+        ON tc.constraint_name = cc.constraint_name
+      WHERE tc.table_schema = $1 
+        AND tc.table_name = $2
+        AND tc.constraint_type IN ('PRIMARY KEY', 'UNIQUE', 'CHECK')
+      ORDER BY tc.constraint_type, tc.constraint_name, kcu.ordinal_position;
+    `;
+
+    const constraintsResult = await pool.query(constraintsQuery, [
+      schema,
+      tableName,
+    ]);
+
+    // Group constraints by name
+    const constraintMap = new Map<string, TableConstraint>();
+    for (const row of constraintsResult.rows) {
+      const constraintName = row.constraint_name;
+      if (!constraintMap.has(constraintName)) {
+        const constraint: TableConstraint = {
+          name: constraintName,
+          type: row.constraint_type,
+          columns: [],
+          definition: row.check_clause || undefined,
+        };
+
+        // For CHECK constraints, try to extract column name from definition
+        if (row.constraint_type === 'CHECK' && row.check_clause) {
+          // Try to extract column name from patterns like "column_name IS NOT NULL"
+          const notNullMatch = row.check_clause.match(/^"?([a-zA-Z_][a-zA-Z0-9_]*)"?\s+IS\s+NOT\s+NULL$/i);
+          if (notNullMatch) {
+            constraint.columns = [notNullMatch[1]];
+          }
+        }
+
+        constraintMap.set(constraintName, constraint);
+      }
+      const constraint = constraintMap.get(constraintName)!;
+      // Add column from key_column_usage (for PRIMARY KEY, UNIQUE, FOREIGN KEY)
+      if (row.column_name && !constraint.columns.includes(row.column_name)) {
+        constraint.columns.push(row.column_name);
+      }
+    }
+
+    return {
+      schema,
+      name: tableName,
+      columns,
+      constraints: Array.from(constraintMap.values()),
+      owner,
+    };
+  }
+
+  /**
+   * Extract indexes for a single table
+   */
+  private async extractTableIndexes(
+    pool: Pool,
+    schema: string,
+    tableName: string,
+  ): Promise<Index[]> {
+    const query = `
+      SELECT
+        i.indexname as name,
+        i.indexdef as definition,
+        i.indexdef LIKE '%UNIQUE%' as is_unique
+      FROM pg_indexes i
+      WHERE i.schemaname = $1 AND i.tablename = $2
+        AND i.indexname NOT LIKE '%_pkey'
+      ORDER BY i.indexname;
+    `;
+
+    const result = await pool.query(query, [schema, tableName]);
+    return result.rows.map((row) => {
+      const methodMatch = row.definition.match(/USING (\w+)/);
+      return {
+        schema,
+        tableSchema: schema,
+        tableName,
+        name: row.name,
+        definition: row.definition,
+        isUnique: row.is_unique,
+        method: methodMatch ? methodMatch[1] : 'btree',
+      };
+    });
+  }
+
+  /**
+   * Extract foreign keys for a single table
+   */
+  private async extractTableForeignKeys(
+    pool: Pool,
+    schema: string,
+    tableName: string,
+  ): Promise<GroupedForeignKey[]> {
+    const query = `
+      SELECT
+        tc.constraint_name as name,
+        kcu.column_name,
+        ccu.table_schema as referenced_schema,
+        ccu.table_name as referenced_table,
+        ccu.column_name as referenced_column,
+        rc.update_rule as on_update,
+        rc.delete_rule as on_delete
+      FROM information_schema.table_constraints tc
+      JOIN information_schema.key_column_usage kcu
+        ON tc.constraint_name = kcu.constraint_name
+        AND tc.table_schema = kcu.table_schema
+      JOIN information_schema.constraint_column_usage ccu
+        ON ccu.constraint_name = tc.constraint_name
+        AND ccu.table_schema = tc.table_schema
+      JOIN information_schema.referential_constraints rc
+        ON rc.constraint_name = tc.constraint_name
+        AND rc.constraint_schema = tc.table_schema
+      WHERE tc.constraint_type = 'FOREIGN KEY'
+        AND tc.table_schema = $1
+        AND tc.table_name = $2
+      ORDER BY tc.constraint_name, kcu.ordinal_position;
+    `;
+
+    const result = await pool.query(query, [schema, tableName]);
+
+    // Group by constraint name
+    const fkMap = new Map<string, GroupedForeignKey>();
+    for (const row of result.rows) {
+      const fkName = row.name;
+      if (!fkMap.has(fkName)) {
+        fkMap.set(fkName, {
+          name: fkName,
+          schema,
+          tableName,
+          columns: [],
+          referencedSchema: row.referenced_schema,
+          referencedTable: row.referenced_table,
+          referencedColumns: [],
+          onUpdate: row.on_update,
+          onDelete: row.on_delete,
+        });
+      }
+      const fk = fkMap.get(fkName)!;
+      fk.columns.push(row.column_name);
+      fk.referencedColumns.push(row.referenced_column);
+    }
+
+    return Array.from(fkMap.values());
+  }
+
+  /**
+   * Generate SQL for a single table
+   */
+  private generateTableSQL(
+    table: Table,
+    indexes: Index[],
+    foreignKeys: GroupedForeignKey[],
+    options: SchemaDumpOptions = {},
+  ): string {
+    const lines: string[] = [];
+    const { includeDrops = false } = options;
+
+    if (includeDrops) {
+      lines.push(`DROP TABLE IF EXISTS "${table.schema}"."${table.name}" CASCADE;`);
+      lines.push('');
+    }
+
+    // CREATE TABLE statement
+    lines.push(`CREATE TABLE "${table.schema}"."${table.name}" (`);
+
+    const columnDefs: string[] = [];
+    for (const column of table.columns) {
+      let def = `    "${column.name}" ${this.formatDataType(column)}`;
+      if (!column.isNullable) {
+        def += ' NOT NULL';
+      }
+      if (column.defaultValue) {
+        def += ` DEFAULT ${column.defaultValue}`;
+      }
+      columnDefs.push(def);
+    }
+
+    // Add primary key and unique constraints inline if single column
+    for (const constraint of table.constraints) {
+      if (constraint.type === 'PRIMARY KEY' && constraint.columns?.length === 1) {
+        const col = columnDefs.find((c) =>
+          c.includes(`"${constraint.columns[0]}"`),
+        );
+        if (col) {
+          columnDefs[
+            columnDefs.indexOf(col)
+          ] = col.replace(' NOT NULL', ' NOT NULL PRIMARY KEY');
+        }
+      } else if (
+        constraint.type === 'UNIQUE' &&
+        constraint.columns?.length === 1
+      ) {
+        const col = columnDefs.find((c) =>
+          c.includes(`"${constraint.columns[0]}"`),
+        );
+        if (col) {
+          columnDefs[columnDefs.indexOf(col)] = col + ' UNIQUE';
+        }
+      }
+    }
+
+    lines.push(columnDefs.join(',\n'));
+
+    // Add multi-column constraints
+    const tableConstraints: string[] = [];
+    // Create a set of NOT NULL column names for filtering redundant checks
+    const notNullColumns = new Set(
+      table.columns.filter((c) => !c.isNullable).map((c) => c.name),
+    );
+
+    for (const constraint of table.constraints) {
+      if (
+        constraint.type === 'PRIMARY KEY' &&
+        constraint.columns &&
+        constraint.columns.length > 1
+      ) {
+        tableConstraints.push(
+          `    CONSTRAINT "${constraint.name}" PRIMARY KEY (${constraint.columns.map((c) => `"${c}"`).join(', ')})`,
+        );
+      } else if (
+        constraint.type === 'UNIQUE' &&
+        constraint.columns &&
+        constraint.columns.length > 1
+      ) {
+        tableConstraints.push(
+          `    CONSTRAINT "${constraint.name}" UNIQUE (${constraint.columns.map((c) => `"${c}"`).join(', ')})`,
+        );
+      } else if (constraint.type === 'CHECK' && constraint.definition) {
+        // Filter out redundant NOT NULL CHECK constraints
+        let isRedundantNotNullCheck = false;
+        
+        if (constraint.columns && constraint.columns.length === 1) {
+          // Check if it's a NOT NULL check on a column that's already NOT NULL
+          const columnName = constraint.columns[0];
+          isRedundantNotNullCheck =
+            /IS\s+NOT\s+NULL/i.test(constraint.definition) &&
+            notNullColumns.has(columnName);
+        } else if (!constraint.columns || constraint.columns.length === 0) {
+          // Try to extract column name from definition if columns array is empty
+          const notNullMatch = constraint.definition.match(/^"?([a-zA-Z_][a-zA-Z0-9_]*)"?\s+IS\s+NOT\s+NULL$/i);
+          if (notNullMatch) {
+            const columnName = notNullMatch[1];
+            isRedundantNotNullCheck = notNullColumns.has(columnName);
+          }
+        }
+
+        if (!isRedundantNotNullCheck) {
+          tableConstraints.push(
+            `    CONSTRAINT "${constraint.name}" CHECK (${constraint.definition})`,
+          );
+        }
+      }
+    }
+
+    if (tableConstraints.length > 0) {
+      lines.push(',');
+      lines.push(tableConstraints.join(',\n'));
+    }
+
+    lines.push(');');
+    lines.push('');
+
+    // Foreign keys
+    if (foreignKeys.length > 0) {
+      for (const fk of foreignKeys) {
+        lines.push(
+          `ALTER TABLE "${fk.schema}"."${fk.tableName}"`,
+        );
+        lines.push(
+          `    ADD CONSTRAINT "${fk.name}" FOREIGN KEY (${fk.columns.map((c) => `"${c}"`).join(', ')})`,
+        );
+        lines.push(
+          `    REFERENCES "${fk.referencedSchema}"."${fk.referencedTable}" (${fk.referencedColumns.map((c) => `"${c}"`).join(', ')})`,
+        );
+        if (fk.onDelete && fk.onDelete !== 'NO ACTION') {
+          lines.push(`    ON DELETE ${fk.onDelete}`);
+        }
+        if (fk.onUpdate && fk.onUpdate !== 'NO ACTION') {
+          lines.push(`    ON UPDATE ${fk.onUpdate}`);
+        }
+        lines.push(';');
+        lines.push('');
+      }
+    }
+
+    // Indexes
+    if (indexes.length > 0) {
+      for (const index of indexes) {
+        lines.push(index.definition + ';');
+        lines.push('');
+      }
+    }
+
+    return lines.join('\n');
   }
 
   /**
@@ -1109,14 +1533,36 @@ export class SchemaDumpService {
   private formatDataType(column: TableColumn): string {
     let type = column.dataType.toUpperCase();
 
+    // Handle arrays - use UDT name if available
+    if (type === 'ARRAY' && column.udtName) {
+      // Extract base type from UDT name (e.g., _text -> text[])
+      const baseType = column.udtName.replace(/^_/, '');
+      return `${baseType}[]`;
+    }
+
+    // Don't add precision/scale for INTEGER types
+    const integerTypes = ['INTEGER', 'INT', 'BIGINT', 'SMALLINT'];
+    if (integerTypes.includes(type)) {
+      return type;
+    }
+
+    // Add length for character types
     if (column.characterMaximumLength) {
       type += `(${column.characterMaximumLength})`;
-    } else if (
+    } 
+    // Add precision/scale for numeric types (but not integers)
+    else if (
       column.numericPrecision !== null &&
-      column.numericScale !== null
+      column.numericScale !== null &&
+      column.numericScale !== 0
     ) {
       type += `(${column.numericPrecision},${column.numericScale})`;
-    } else if (column.numericPrecision !== null) {
+    } else if (
+      column.numericPrecision !== null &&
+      column.numericScale === 0 &&
+      !integerTypes.includes(type)
+    ) {
+      // Only add precision if scale is 0 and it's not an integer type
       type += `(${column.numericPrecision})`;
     }
 

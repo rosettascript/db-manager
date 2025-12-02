@@ -73,5 +73,44 @@ export const schemaDumpService = {
     // For JSON format, use apiClient
     return apiClient.get<SchemaDumpResponse>(endpoint).then((data) => data.sql);
   },
+
+  /**
+   * Get DDL for a single table
+   * GET /api/schema-dump/:connectionId/:schema/:table?includeDrops=false
+   */
+  async getTableDDL(
+    connectionId: string,
+    schema: string,
+    table: string,
+    options: { includeDrops?: boolean } = {},
+  ): Promise<string> {
+    const { includeDrops = false } = options;
+
+    const queryParams = new URLSearchParams({
+      includeDrops: includeDrops.toString(),
+    });
+
+    const endpoint = `schema-dump/${connectionId}/${encodeURIComponent(schema)}/${encodeURIComponent(table)}?${queryParams.toString()}`;
+    
+    // Use fetch directly to get text response
+    const { getApiUrl } = await import('../config');
+    const url = getApiUrl(endpoint);
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({
+        message: `HTTP ${response.status}: ${response.statusText}`,
+      }));
+      throw new Error(error.message || 'Failed to generate table DDL');
+    }
+
+    return await response.text();
+  },
 };
 

@@ -7,6 +7,7 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
+  
   return (
     <CommandPaletteProvider>
       <SidebarProvider>
