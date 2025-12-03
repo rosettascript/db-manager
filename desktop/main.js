@@ -18,10 +18,14 @@ console.log('📁 Custom temp directory set (BEFORE Electron):', customTempDir);
 // NOW we can safely require electron
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const { spawn, fork } = require('child_process');
+const http = require('http');
+const express = require('express');
 
 let mainWindow;
 let backendProcess;
+let frontendServer;
 const isDev = process.argv.includes('--dev');
+const FRONTEND_SERVER_PORT = 8888; // Local HTTP server for frontend files
 
 // Minimal flags - only what's absolutely necessary
 function setupElectronFlags() {
@@ -29,6 +33,8 @@ function setupElectronFlags() {
     try {
       // Only set no-sandbox - that's it!
       app.commandLine.appendSwitch('no-sandbox');
+      // Disable /dev/shm usage to avoid Chromium shared memory errors
+      app.commandLine.appendSwitch('disable-dev-shm-usage');
       
       console.log('🔓 Sandbox disabled for packaged app');
     } catch (error) {
@@ -253,13 +259,24 @@ function createWindow() {
   // Remove menu bar
   mainWindow.setMenuBarVisibility(false);
 
-  // Load the frontend
+  // Load the frontend via HTTP (not file://) so html-to-image works!
   let frontendPath;
   if (isDev) {
-    frontendPath = `http://localhost:${getFrontendPort()}`;
+    // In development, check if Vite dev server is running
+    const devServerPort = getFrontendPort();
+    const builtFrontendPath = path.join(__dirname, '..', 'frontend', 'dist');
+    
+    // Try to use built frontend via local HTTP server
+    if (fs.existsSync(builtFrontendPath)) {
+      frontendPath = `http://localhost:${FRONTEND_SERVER_PORT}`;
+      console.log('📦 Using built frontend via local HTTP server (for html-to-image compatibility)');
+    } else {
+      frontendPath = `http://localhost:${devServerPort}`;
+      console.log('🔥 Using Vite dev server');
+    }
   } else {
-    // In packaged app, frontend is in extraResources/app/frontend/dist
-    frontendPath = `file://${path.join(process.resourcesPath, 'app', 'frontend', 'dist', 'index.html')}`;
+    // In packaged app, serve via local HTTP server too
+    frontendPath = `http://localhost:${FRONTEND_SERVER_PORT}`;
   }
 
   console.log(`🌐 Loading frontend from: ${frontendPath}`);
@@ -269,11 +286,44 @@ function createWindow() {
   // Open DevTools only in development mode
   if (isDev || process.env.DEBUG_DESKTOP) {
     mainWindow.webContents.openDevTools();
+    console.log('🔍 DevTools opened for debugging');
   }
   
   
   
   
+  // Handle file downloads
+  mainWindow.webContents.session.on('will-download', (event, item, webContents) => {
+    // Get the default download path
+    const downloadPath = path.join(app.getPath('downloads'), item.getFilename());
+    
+    console.log(`💾 Download started: ${item.getFilename()}`);
+    
+    // Set the save path
+    item.setSavePath(downloadPath);
+    
+    item.on('updated', (event, state) => {
+      if (state === 'interrupted') {
+        console.log('❌ Download interrupted');
+      } else if (state === 'progressing') {
+        if (item.isPaused()) {
+          console.log('⏸️  Download paused');
+        } else {
+          const percent = Math.round((item.getReceivedBytes() / item.getTotalBytes()) * 100);
+          console.log(`📥 Downloaded ${percent}%`);
+        }
+      }
+    });
+    
+    item.once('done', (event, state) => {
+      if (state === 'completed') {
+        console.log(`✅ Download completed: ${downloadPath}`);
+      } else {
+        console.log(`❌ Download failed: ${state}`);
+      }
+    });
+  });
+
   // Log any console messages from the renderer
   mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
     console.log(`[Renderer ${level}]:`, message);
@@ -324,6 +374,53 @@ async function checkBackend(maxRetries = 3) {
 }
 
 /**
+ * Start local HTTP server for frontend files (so html-to-image works!)
+ */
+async function startFrontendServer() {
+  return new Promise((resolve, reject) => {
+    const app = express();
+    
+    // Determine frontend path
+    let frontendDistPath;
+    if (isDev) {
+      frontendDistPath = path.join(__dirname, '..', 'frontend', 'dist');
+    } else {
+      frontendDistPath = path.join(process.resourcesPath, 'app', 'frontend', 'dist');
+    }
+    
+    console.log(`🌐 Frontend dist path: ${frontendDistPath}`);
+    
+    // Serve static files with proper MIME types
+    app.use(express.static(frontendDistPath, {
+      setHeaders: (res, filepath) => {
+        if (filepath.endsWith('.js')) {
+          res.setHeader('Content-Type', 'application/javascript');
+        } else if (filepath.endsWith('.css')) {
+          res.setHeader('Content-Type', 'text/css');
+        } else if (filepath.endsWith('.html')) {
+          res.setHeader('Content-Type', 'text/html');
+        }
+      }
+    }));
+    
+    // SPA fallback - serve index.html for all other routes
+    app.use((req, res) => {
+      res.sendFile(path.join(frontendDistPath, 'index.html'));
+    });
+    
+    frontendServer = app.listen(FRONTEND_SERVER_PORT, 'localhost', () => {
+      console.log(`✅ Frontend server started on http://localhost:${FRONTEND_SERVER_PORT}`);
+      resolve();
+    });
+    
+    frontendServer.on('error', (error) => {
+      console.error('❌ Frontend server error:', error);
+      reject(error);
+    });
+  });
+}
+
+/**
  * Initialize the application
  */
 async function initialize() {
@@ -333,6 +430,22 @@ async function initialize() {
     console.log('🚀  DB Manager Desktop - Starting Application');
     console.log('🚀 ===============================================');
     console.log('');
+    
+    // Start frontend HTTP server (so html-to-image works!)
+    console.log('🌐 Starting frontend HTTP server...');
+    const frontendDistPath = isDev 
+      ? path.join(__dirname, '..', 'frontend', 'dist')
+      : path.join(process.resourcesPath, 'app', 'frontend', 'dist');
+    
+    if (fs.existsSync(frontendDistPath)) {
+      try {
+        await startFrontendServer();
+      } catch (error) {
+        console.error('⚠️  Frontend server issue:', error.message);
+      }
+    } else {
+      console.log('⚠️  Frontend dist not found, assuming Vite dev server will be used');
+    }
     
     // Always try to start backend - it's quick and handles existing instances
     console.log('🚀 Starting backend...');
@@ -390,6 +503,15 @@ app.on('before-quit', () => {
       // Ignore errors
     }
   }
+  
+  // Close frontend server
+  if (frontendServer) {
+    try {
+      frontendServer.close();
+    } catch (e) {
+      // Ignore errors
+    }
+  }
 });
 
 /**
@@ -405,5 +527,91 @@ ipcMain.handle('get-version', () => {
 
 ipcMain.handle('get-backend-port', () => {
   return BACKEND_PORT;
+});
+
+ipcMain.handle('download-file', async (event, url, filename) => {
+  try {
+    console.log(`📥 Download requested: ${filename}`);
+    
+    // Use the main window to trigger download
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.downloadURL(url);
+      return { success: true };
+    }
+    
+    return { success: false, error: 'Window not available' };
+  } catch (error) {
+    console.error('Download error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('save-file', async (event, base64Data, filename) => {
+  try {
+    console.log(`💾 Saving file: ${filename}`);
+    
+    // Get Downloads folder path
+    const downloadsPath = app.getPath('downloads');
+    const filePath = path.join(downloadsPath, filename);
+    
+    // Extract base64 data (remove data URL prefix if present)
+    let base64String = base64Data;
+    if (base64Data.includes(',')) {
+      base64String = base64Data.split(',')[1];
+    }
+    
+    // Convert base64 to buffer
+    const buffer = Buffer.from(base64String, 'base64');
+    
+    // Write file to Downloads folder
+    fs.writeFileSync(filePath, buffer);
+    
+    console.log(`✅ File saved successfully: ${filePath}`);
+    return { success: true, path: filePath };
+  } catch (error) {
+    console.error('❌ Save file error:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('capture-screenshot', async (event, bounds) => {
+  try {
+    console.log(`📸 Capturing screenshot with bounds:`, bounds);
+    
+    if (!mainWindow || !mainWindow.webContents) {
+      return { success: false, error: 'Window not available' };
+    }
+    
+    // Capture specific region if bounds provided, otherwise full page  
+    // capturePage automatically captures at the display's device pixel ratio (high DPI)
+    let image;
+    if (bounds && bounds.x !== undefined && bounds.y !== undefined && bounds.width > 0 && bounds.height > 0) {
+      const rect = {
+        x: Math.round(bounds.x),
+        y: Math.round(bounds.y),
+        width: Math.round(bounds.width),
+        height: Math.round(bounds.height)
+      };
+      console.log(`📸 Capturing region:`, rect);
+      console.log(`📸 Device pixel ratio:`, require('electron').screen.getPrimaryDisplay().scaleFactor);
+      
+      // Electron automatically captures at device pixel ratio (usually 1-2x on most displays)
+      image = await mainWindow.webContents.capturePage(rect);
+      console.log(`📸 Captured size:`, image.getSize());
+    } else {
+      console.log(`📐 Capturing entire page`);
+      image = await mainWindow.webContents.capturePage();
+    }
+    
+    const pngBuffer = image.toPNG();
+    const base64 = pngBuffer.toString('base64');
+    const dataUrl = `data:image/png;base64,${base64}`;
+    
+    console.log(`✅ Screenshot captured: ${pngBuffer.length} bytes`);
+    return { success: true, dataUrl };
+  } catch (error) {
+    console.error('❌ Screenshot capture error:', error);
+    return { success: false, error: error.message };
+  }
 });
 

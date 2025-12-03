@@ -8,6 +8,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAppPath: () => ipcRenderer.invoke('get-app-path'),
   getVersion: () => ipcRenderer.invoke('get-version'),
   getBackendPort: () => ipcRenderer.invoke('get-backend-port'),
+  downloadFile: (url, filename) => ipcRenderer.invoke('download-file', url, filename),
+  saveFile: (base64Data, filename) => ipcRenderer.invoke('save-file', base64Data, filename),
+  captureScreenshot: (bounds) => ipcRenderer.invoke('capture-screenshot', bounds),
   isElectron: true
 });
 
